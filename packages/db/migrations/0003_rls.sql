@@ -388,7 +388,8 @@ CREATE POLICY ops_read_fee      ON errand_fee     FOR SELECT TO sidequest_ops US
 -- Ops sees cells, never points (§7.4). The point column is withheld by the view, and the base
 -- table carries no ops policy at all, so a direct query returns zero rows.
 CREATE OR REPLACE VIEW ops_location_cells WITH (security_barrier = true) AS
-  SELECT runner_id, errand_id, cell_r8, cell_r9, recorded_at FROM runner_location_history;
+  SELECT runner_id, errand_id, h3_cell_to_parent(cell_r9, 8) AS cell_r8, cell_r9, recorded_at
+    FROM runner_location_history;
 GRANT SELECT ON ops_location_cells TO sidequest_ops;
 CREATE POLICY ops_read_loch ON runner_location_history FOR SELECT TO sidequest_ops
   USING (app_has_ent('location.read_cells'));

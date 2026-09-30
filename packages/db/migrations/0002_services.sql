@@ -2,6 +2,8 @@
 -- packages/db/migrations/0002_services.sql
 -- Forward-only. Adds assignment modes, funding modes, two-sided fees, checkpoints/ETA,
 -- payment rails, and the per-service event plumbing. Nothing here edits 0001.
+-- migrate:autocommit — ALTER TYPE ... ADD VALUE must commit before the partial index below
+-- can reference the new value, so this file runs statement by statement.
 
 -- ─────────────────────────────────────────────── enums
 
@@ -29,7 +31,7 @@ ALTER TABLE errand
   ADD COLUMN agreed_fee_cents bigint CHECK (agreed_fee_cents >= 0);
 
 -- Market runs load per stall; everything else loads the agreed amount at assignment.
-UPDATE errand SET funding_mode = CASE WHEN kind = 'market_run' THEN 'tranche' ELSE 'upfront' END;
+UPDATE errand SET funding_mode = (CASE WHEN kind = 'market_run' THEN 'tranche' ELSE 'upfront' END)::funding_mode;
 
 -- First-write-wins depends on this partial index staying selective.
 CREATE INDEX errand_claimable_idx ON errand (status, assignment_mode)

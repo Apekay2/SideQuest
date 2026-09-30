@@ -5,7 +5,7 @@
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE EXTENSION IF NOT EXISTS "postgis";
 CREATE EXTENSION IF NOT EXISTS "h3";        -- h3-pg; provides the h3index type
-CREATE EXTENSION IF NOT EXISTS "h3_postgis";
+CREATE EXTENSION IF NOT EXISTS "h3_postgis" CASCADE;  -- pulls in postgis_raster
 
 -- ─────────────────────────────────────────────── enums
 

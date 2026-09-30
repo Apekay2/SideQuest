@@ -175,7 +175,7 @@ CREATE TABLE fx_conversion (
 -- (10-panel-review.md §10.6.3).
 ALTER TABLE posting ADD COLUMN fund_class text NOT NULL DEFAULT 'client'
   CHECK (fund_class IN ('client', 'platform'));
-UPDATE posting SET fund_class = 'platform' WHERE account IN ('platform_fee', 'platform_cash');
+UPDATE posting SET fund_class = 'platform' WHERE account IN ('platform_fee', 'service_fee_requester', 'maintenance_fee_runner');
 ALTER TABLE posting ALTER COLUMN fund_class DROP DEFAULT;
 
 CREATE INDEX posting_currency_account_idx ON posting (currency, account, owner_id);

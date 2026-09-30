@@ -13,12 +13,11 @@
     "gates": "tsx scripts/assert-rls-coverage.ts && tsx scripts/assert-currency-invariants.ts"
   },
   "dependencies": {
-    "drizzle-orm": "^0.45.3",
+    "@sidequest/domain": "workspace:*",
     "pg": "^8.23.0",
     "postgres": "^3.4.9"
   },
   "devDependencies": {
-    "@types/pg": "^8.23.1",
-    "drizzle-kit": "^0.31.11"
+    "@types/pg": "^8.23.1"
   }
 }
