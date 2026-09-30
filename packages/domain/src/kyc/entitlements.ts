@@ -12,10 +12,21 @@ export const ENTITLEMENTS = [
   'errand.accept',      // be awarded an errand carrying a card
   'batch.create',
   'payout.request',
-  'ops.kyc_review',
-  'ops.dispute_view',
+  // Staff grants. The names are the ones 0003_rls.sql checks with app_has_ent(); a grant
+  // that does not match a policy name silently grants nothing.
+  'ops.read',
+  'kyc.review',
+  'evidence.view',
+  'ledger.read',
+  'location.read_cells',
+  'audit.read',
   'legal_ops',          // the only entitlement that can split a frozen escrow
 ] as const;
+
+/** Entitlements that only staff can hold. Never derived from a verification tier. */
+export const STAFF_ENTITLEMENTS: readonly Entitlement[] = [
+  'ops.read', 'kyc.review', 'evidence.view', 'ledger.read', 'location.read_cells', 'audit.read', 'legal_ops',
+];
 
 export type Entitlement = (typeof ENTITLEMENTS)[number];
 
