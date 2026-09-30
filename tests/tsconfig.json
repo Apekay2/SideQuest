@@ -1,1 +1,7 @@
-{ "extends": "../tsconfig.base.json", "include": ["e2e", "vitest.config.ts"] }
+{
+  "extends": "../tsconfig.base.json",
+  // Fixture rows are read with destructuring (`const [row] = await admin\`…\``); a test that
+  // gets no row fails on the next line anyway, so the strict index check adds noise here only.
+  "compilerOptions": { "noUncheckedIndexedAccess": false },
+  "include": ["e2e", "vitest.config.ts"]
+}

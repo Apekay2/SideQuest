@@ -172,6 +172,12 @@ CREATE POLICY item_requester_update ON line_item FOR UPDATE TO sidequest_app
 CREATE POLICY bid_award ON bid FOR UPDATE TO sidequest_app
   USING (app_is_requester(errand_id)) WITH CHECK (app_is_requester(errand_id));
 
+-- A requester cancelling after assignment is charged their fee half in that transaction and
+-- stamps when; nothing else on the frozen fee row is writable by anyone but the worker.
+GRANT UPDATE (requester_charged_at) ON errand_fee TO sidequest_app;
+CREATE POLICY fee_requester_charge ON errand_fee FOR UPDATE TO sidequest_app
+  USING (app_is_requester(errand_id)) WITH CHECK (app_is_requester(errand_id));
+
 -- Escrow is created by the requester when they fund.
 GRANT INSERT ON escrow TO sidequest_app;
 CREATE POLICY escrow_create ON escrow FOR INSERT TO sidequest_app WITH CHECK (app_is_requester(errand_id));

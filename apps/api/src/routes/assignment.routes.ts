@@ -202,7 +202,9 @@ export default async function assignmentRoutes(app: FastifyInstance) {
           LEFT JOIN relationship r
                  ON r.runner_id = rl.runner_id AND r.requester_id = ${req.actor!.id}
          WHERE rl.is_online
-           AND rl.cell_r8 = ANY (h3_grid_disk(o.cell, ${rings}))
+           -- h3_grid_disk is set-returning, so it is a subquery; the handoff's ANY(...) form
+           -- is rejected by Postgres ("set-returning functions are not allowed in WHERE").
+           AND rl.cell_r8 IN (SELECT h3_grid_disk(o.cell, ${rings}))
            AND a.verification_tier >= 3
            AND a.suspended_at IS NULL
            AND a.id <> ${req.actor!.id}

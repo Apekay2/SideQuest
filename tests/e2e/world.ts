@@ -21,6 +21,9 @@ export interface User {
 }
 
 export class Client {
+  /** Each simulated device gets its own address, as real phones on a carrier NAT would not —
+   *  the per-IP OTP limit is exercised deliberately in security.test.ts, not by accident. */
+  readonly ip = `10.${randomInt(0, 255)}.${randomInt(0, 255)}.${randomInt(1, 254)}`;
   constructor(private readonly app: FastifyInstance, public token?: string, private readonly extraHeaders: Record<string, string> = {}) {}
 
   async req<T = any>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE' | 'PUT', url: string, body?: unknown,
@@ -28,10 +31,10 @@ export class Client {
     const headers: Record<string, string> = { ...this.extraHeaders, ...(opts.headers ?? {}) };
     if (this.token) headers.authorization = `Bearer ${this.token}`;
     if (method === 'POST' && opts.idem !== false) headers['idempotency-key'] = opts.idem ?? randomUUID();
-    const res = await this.app.inject({ method, url, headers, ...(body !== undefined ? { payload: body as object } : {}) });
+    const res = await this.app.inject({ method, url, headers, remoteAddress: this.ip, ...(body !== undefined ? { payload: body as object } : {}) });
     let parsed: unknown = res.body;
     try { parsed = res.body ? JSON.parse(res.body) : null; } catch { /* non-JSON body */ }
-    return { status: res.statusCode, body: parsed as T, headers: res.headers };
+    return { status: res.statusCode, body: parsed as T, headers: res.headers as Res["headers"] };
   }
   get<T = any>(url: string, opts?: { headers?: Record<string, string> }) { return this.req<T>('GET', url, undefined, opts); }
   post<T = any>(url: string, body?: unknown, opts?: { idem?: string | false; headers?: Record<string, string> }) { return this.req<T>('POST', url, body ?? {}, opts); }
