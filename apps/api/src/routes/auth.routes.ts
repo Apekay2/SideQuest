@@ -147,7 +147,7 @@ export default async function authRoutes(app: FastifyInstance) {
       if (account!.suspended_at) throw new AppError(403, 'ACCOUNT_SUSPENDED', 'This account is suspended. Contact support.');
 
       return issueSession(tx, account!, body.device_id ?? null, null);
-    });
+    }, { otpChallengeId: body.challenge_id });
 
     app.setRefreshCookie(reply, session.refresh);
     return reply.send(session);

@@ -6,7 +6,7 @@ import pino from 'pino';
 
 /** Keys whose values never appear in a log line or an error body. */
 const REDACT_KEYS = new Set([
-  'msisdn', 'phone', 'lat', 'lng', 'point', 'code', 'otp', 'refresh', 'access', 'token',
+  'msisdn', 'phone', 'lat', 'lng', 'point', 'otp', 'refresh', 'access', 'token',
   'authorization', 'cookie', 'id_number', 'next_of_kin', 'qr_token', 'hmac_tag', 'secret',
 ]);
 
@@ -32,7 +32,7 @@ export const logger = pino({
   base: { service: process.env.SERVICE_NAME ?? 'sidequest' },
   redact: {
     paths: ['req.headers.authorization', 'req.headers.cookie', '*.msisdn', '*.lat', '*.lng',
-            '*.code', '*.refresh', '*.access', '*.token', '*.qr_token'],
+            '*.otp', '*.refresh', '*.access', '*.token', '*.qr_token'],
     censor: '[redacted]',
   },
   formatters: { level: (label) => ({ level: label }) },

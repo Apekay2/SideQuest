@@ -169,6 +169,21 @@ export function reverseTranche(args: {
 }
 
 /**
+ * A card is voided with value left on it (an upfront errand that spent less than its cap).
+ * The issuer's reported balance returns from the vendor side to escrow, where settlement or
+ * a refund picks it up. The amount comes from the issuer, never from arithmetic on our side.
+ */
+export function returnUnspent(args: {
+  errandId: string; requesterId: string; amountCents: Cents; currency: CurrencyCode;
+}): PostingGroup {
+  nonNegative('card.unspent_return', { amount: args.amountCents });
+  return build(args.errandId, 'card.unspent_return', args.currency, [
+    debit('escrow_hold', args.requesterId, args.amountCents),
+    credit('vendor_paid', null, args.amountCents),
+  ]);
+}
+
+/**
  * Ladder rung 3: the runner paid cash and is owed it back. The tranche's float becomes a
  * liability to the runner, cleared at settlement. The escrow already moved to float when the
  * stall was approved, so escrow is not touched a second time here.

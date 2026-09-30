@@ -179,8 +179,22 @@ CREATE POLICY escrow_create ON escrow FOR INSERT TO sidequest_app WITH CHECK (ap
 -- A user reads their own wallet postings. Wallet groups carry no errand, so the party
 -- policy could never admit them and GET /wallet would always show zero.
 CREATE POLICY posting_owner ON posting FOR SELECT TO sidequest_app USING (owner_id = app_actor());
-CREATE POLICY pgroup_owner ON posting_group FOR SELECT TO sidequest_app
-  USING (EXISTS (SELECT 1 FROM posting p WHERE p.group_id = posting_group.id AND p.owner_id = app_actor()));
+-- The group side goes through a definer function: posting's own policy already consults
+-- posting_group, so a policy here that read posting directly would recurse (Postgres refuses
+-- with "infinite recursion detected in policy"), exactly as 0003's errand helpers avoid.
+CREATE OR REPLACE FUNCTION app_owns_group(g uuid) RETURNS boolean
+  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS
+$$ SELECT EXISTS (SELECT 1 FROM posting WHERE group_id = g AND owner_id = app_actor()) $$;
+ALTER FUNCTION app_owns_group(uuid) OWNER TO sidequest_definer;
+REVOKE EXECUTE ON FUNCTION app_owns_group(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION app_owns_group(uuid) TO sidequest_app;
+CREATE POLICY pgroup_owner ON posting_group FOR SELECT TO sidequest_app USING (app_owns_group(id));
+
+-- Upfront errands (queue standing, document drops) load the whole cap as one tranche at
+-- seq 0 with no stall behind it (06-services.md §6.6).
+-- destructive: acknowledged — NOT NULL relaxed; rollback is SET NOT NULL once no seq-0
+-- tranches exist.
+ALTER TABLE tranche ALTER COLUMN stall_id DROP NOT NULL;
 
 -- Ladder rung 3 needs the requester's answer stored somewhere the worker can read it.
 ALTER TABLE tranche ADD COLUMN reimbursement_confirmed boolean;
@@ -260,6 +274,25 @@ CREATE POLICY sos_own ON sos_case FOR SELECT TO sidequest_app USING (raised_by =
 GRANT SELECT, UPDATE ON sos_case TO sidequest_ops;
 CREATE POLICY ops_sos ON sos_case FOR ALL TO sidequest_ops USING (app_has_ent('ops.read')) WITH CHECK (app_has_ent('ops.read'));
 
+-- Every reconciliation run is recorded, so "it has not reported in three days" is visible:
+-- a silent job is indistinguishable from a clean one.
+CREATE TABLE reconciliation_run (
+  id          bigserial PRIMARY KEY,
+  ran_at      timestamptz NOT NULL DEFAULT now(),
+  checks_run  integer NOT NULL,
+  findings    integer NOT NULL,
+  paged       integer NOT NULL,
+  duration_ms integer NOT NULL,
+  detail      jsonb NOT NULL DEFAULT '[]'
+);
+ALTER TABLE reconciliation_run ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reconciliation_run FORCE ROW LEVEL SECURITY;
+GRANT SELECT, INSERT ON reconciliation_run TO sidequest_worker;
+GRANT USAGE, SELECT ON SEQUENCE reconciliation_run_id_seq TO sidequest_worker;
+GRANT SELECT ON reconciliation_run TO sidequest_ops;
+CREATE POLICY recon_worker ON reconciliation_run FOR ALL TO sidequest_worker USING (true) WITH CHECK (true);
+CREATE POLICY recon_ops    ON reconciliation_run FOR SELECT TO sidequest_ops USING (app_has_ent('ledger.read'));
+
 -- ─────────────────────────────────────────────── 7. worker reach
 --
 -- The worker drains the outbox and runs the ladder, settlement and notifications. 0003
@@ -316,7 +349,16 @@ CREATE POLICY ops_read_cp  ON errand_checkpoint FOR SELECT TO sidequest_ops USIN
 CREATE POLICY ops_read_bid ON bid               FOR SELECT TO sidequest_ops USING (app_has_ent('ops.read'));
 CREATE POLICY ops_read_rel ON relationship      FOR SELECT TO sidequest_ops USING (app_has_ent('ops.read'));
 
--- ─────────────────────────────────────────────── 9. sequences
+-- ─────────────────────────────────────────────── 9. reference tables
+--
+-- 0003 revoked everything from PUBLIC, including the currency and market reference tables
+-- 0005 added afterwards. Every role needs to read them; none may write them.
+GRANT SELECT ON money_currency, market TO sidequest_app, sidequest_worker, sidequest_ops;
+-- PostGIS reads spatial_ref_sys inside ST_Distance and friends on geography. The same blanket
+-- revoke removed it, and every distance query failed with "permission denied".
+GRANT SELECT ON spatial_ref_sys TO sidequest_app, sidequest_worker, sidequest_ops;
+
+-- ─────────────────────────────────────────────── 10. sequences
 --
 -- bigserial columns need USAGE on their sequence. Without these every INSERT into posting,
 -- the location trail and the checkpoints failed with "permission denied for sequence".

@@ -9,6 +9,11 @@
 //   - a load whose shilling amount ends in 13  → hard decline 'do_not_honour'
 //   - a load whose shilling amount ends in 17  → 'issuer_timeout' (retryable), every time
 //   anything else succeeds.
+//
+// Spending: a real card's balance falls when the runner taps it at a till. The mock has no
+// till, so `simulateSpend` stands in for one, and `autoSpend` (development) spends each load
+// in full immediately — as if the runner paid exactly the approved stall total. Without it,
+// settlement correctly returns the whole loaded balance to escrow as unspent.
 
 import type { Redis } from 'ioredis';
 import { createHash } from 'node:crypto';
@@ -16,7 +21,12 @@ import type { IssuerPort, IssuedCard, LoadResult } from '@sidequest/domain/card/
 import { cents, type Cents } from '@sidequest/domain/money/money';
 
 export class MockIssuer implements IssuerPort {
-  constructor(private readonly redis: Redis, private readonly prefix = 'mockissuer') {}
+  constructor(
+    private readonly redis: Redis,
+    private readonly opts: { prefix?: string; autoSpend?: boolean } = {},
+  ) {}
+
+  private get prefix() { return this.opts.prefix ?? 'mockissuer'; }
 
   private k(...parts: string[]) { return [this.prefix, ...parts].join(':'); }
 
@@ -54,10 +64,18 @@ export class MockIssuer implements IssuerPort {
       return { ok: false, retryable: true, code: 'issuer_timeout', message: 'Issuer timed out' };
     } else {
       await this.redis.hincrby(this.k('card', args.issuerRef), 'balance', args.amountCents);
+      if (this.opts.autoSpend) await this.simulateSpend(args.issuerRef, args.amountCents);
       result = { ok: true, providerRef: `mock_load_${createHash('sha256').update(args.idemKey).digest('hex').slice(0, 12)}` };
     }
     await this.redis.set(this.k('load', args.idemKey), JSON.stringify(result));
     return result;
+  }
+
+  /** A purchase at a till. Refuses to overdraw, as the issuer's ceiling would. */
+  async simulateSpend(issuerRef: string, amountCents: number): Promise<void> {
+    const left = Number(await this.redis.hget(this.k('card', issuerRef), 'balance') ?? 0);
+    if (amountCents > left) throw new Error(`mock card ${issuerRef} has ${left}, cannot spend ${amountCents}`);
+    await this.redis.hincrby(this.k('card', issuerRef), 'balance', -amountCents);
   }
 
   async voidCard(args: { issuerRef: string; idemKey: string }): Promise<void> {

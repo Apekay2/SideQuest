@@ -1,0 +1,21 @@
+{
+  "name": "@sidequest/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@sidequest/adapters": "workspace:*",
+    "@sidequest/api": "workspace:*",
+    "@sidequest/config": "workspace:*",
+    "@sidequest/contracts": "workspace:*",
+    "@sidequest/db": "workspace:*",
+    "@sidequest/domain": "workspace:*",
+    "@sidequest/worker": "workspace:*",
+    "ioredis": "^6.0.0",
+    "postgres": "^3.4.9"
+  }
+}

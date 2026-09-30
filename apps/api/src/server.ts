@@ -67,12 +67,20 @@ export function buildDeps(cfg: Config): Deps {
 }
 
 export async function build(deps: Deps): Promise<FastifyInstance> {
+  // The API's Redis client does not queue commands while disconnected (the rate limiter must
+  // fail closed on money paths, not wait). So it has to be connected before the first request.
+  if (deps.redis.status !== 'ready') {
+    await new Promise<void>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('Redis did not become ready within 10s')), 10_000);
+      deps.redis.once('ready', () => { clearTimeout(t); resolve(); });
+    });
+  }
+
   const app = Fastify({
     loggerInstance: logger.child({ component: 'api' }),
     genReqId: () => randomUUID(),
     bodyLimit: 256 * 1024,
     trustProxy: false,          // hardening.ts resolves the client IP from a fixed hop count
-    disableRequestLogging: deps.cfg.NODE_ENV === 'test',
   });
   app.decorate('deps', deps);
 
