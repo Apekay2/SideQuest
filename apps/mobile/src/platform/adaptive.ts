@@ -9,8 +9,10 @@
 // says or the order it says it in. Anything in the second category belongs in the shared
 // component, not here.
 
-import { Platform, AccessibilityInfo, InteractionManager } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Platform, AccessibilityInfo, BackHandler } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import * as SecureStore from 'expo-secure-store';
 
 export const isIOS = Platform.OS === 'ios';
 export const isAndroid = Platform.OS === 'android';
@@ -25,17 +27,33 @@ export function pick<T>(options: { ios: T; android: T }): T {
 
 export const metrics = {
   /**
-   * Minimum tap target. HIG says 44pt, Material says 48dp. We take the LARGER on each
-   * platform rather than the platform's own minimum: a 44pt row is legal on iOS but a
-   * market trader with wet hands is not reading the guidelines.
+   * Minimum tap target for rows. The parity design draws 44pt rows on iOS and 48dp on
+   * Android — each platform's own floor — while §11.5 sets 48 as the accessibility floor for
+   * every CONTROL on both. Rows follow the drawing; hit areas never go below `hitFloor`.
    */
   tap: pick({ ios: 44, android: 48 }),
+
+  /** §11.5: the stricter of the two platforms, applied everywhere a finger lands. */
+  hitFloor: 48,
+
+  /** Secondary action height on the approval sheet (Substitute / Decline). */
+  secondaryButtonHeight: pick({ ios: 44, android: 48 }),
+
+  /** Large title in the header. */
+  titleSize: pick({ ios: 30, android: 28 }),
+
+  /** Avatar in the header's trailing slot. */
+  avatar: pick({ ios: 36, android: 40 }),
+
+  /** Home indicator reserve under the iOS tab bar is the safe-area inset; Android has none. */
+  sheetBottomPad: pick({ ios: 34, android: 12 }),
 
   /** Primary button height. Material's filled button is taller; matching it keeps the
    *  Approve button feeling native without changing its position or label. */
   primaryButtonHeight: pick({ ios: 52, android: 56 }),
 
   /** Screen gutter. 20 on iOS, 16 on Android — Material's own baseline grid. */
+  // Also used as the sheet's horizontal padding (design: 20 / 16).
   gutter: pick({ ios: 20, android: 16 }),
 
   /** Bottom sheet corner radius. 26 vs M3's 28. */
@@ -106,9 +124,7 @@ export const headerStyle = pick({
  * On iOS this returns a no-op subscription, so callers need no conditional.
  */
 export function useSystemBack(handler: () => boolean): void {
-  const { BackHandler } = require('react-native');
-  const React = require('react');
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isAndroid) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', handler);
     return () => sub.remove();
@@ -234,10 +250,72 @@ export async function prefersReducedMotion(): Promise<boolean> {
   return AccessibilityInfo.isReduceMotionEnabled();
 }
 
+export function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
+  useEffect(() => {
+    let live = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((v) => { if (live) setReduced(v); });
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduced);
+    return () => { live = false; sub.remove(); };
+  }, []);
+  return reduced;
+}
+
+// ─────────────────────────────────────────────── drawing details
+
+/** Tab bar, drawn the way each platform draws it (parity design §1). */
+export const tabBarStyle = pick({
+  ios: {
+    kind: 'ios' as const,
+    /** Translucent surface over a blur; tint on icon and label, no indicator. */
+    background: 'rgba(249,244,237,0.92)',
+    paddingTop: 7,
+    labelWeight: 'active-only' as const,
+    inactiveColor: 'textFaint' as const,
+  },
+  android: {
+    kind: 'android' as const,
+    /** M3: 64×32 pill behind the active icon in accentEdge. */
+    background: 'surface' as const,
+    indicator: { width: 64, height: 32, radius: 16, color: 'accentEdge' as const },
+    inactiveColor: 'textMuted' as const,
+  },
+});
+
+/** The FAB. Only Android draws one (requesterNav.createAs === 'fab'). M3 large-ish, 64 dp. */
+export const fab = { size: 64, radius: 20, right: 16, bottomAboveBar: 16 } as const;
+
+/** Web previews are neither; `pick` resolves them to the Android drawing. */
+export const platformLabel = pick({ ios: 'iOS', android: 'Android' });
+
 /** Screen-reader announcement for the one state a sighted user sees as a colour change:
  *  the total going over cap. Shared copy, platform-native delivery. */
 export function announce(message: string): void {
-  InteractionManager.runAfterInteractions(() => {
-    AccessibilityInfo.announceForAccessibility(message);
-  });
+  // Deferred a frame so the announcement follows the re-render that caused it rather than
+  // being cut off by it (InteractionManager is deprecated as of RN 0.86).
+  setTimeout(() => AccessibilityInfo.announceForAccessibility(message), 0);
 }
+
+// ─────────────────────────────────────────────── secure storage
+
+/**
+ * Where the refresh token lives: Keychain on iOS, Keystore-backed storage on Android
+ * (09-appsec: the token is never reachable from JavaScript on the web console and never in
+ * plain AsyncStorage on a phone). Web previews have neither, so they keep it in memory only
+ * and sign in again on reload.
+ */
+const memory = new Map<string, string>();
+export const secureStore = {
+  async get(key: string): Promise<string | null> {
+    if (Platform.OS === 'web') return memory.get(key) ?? null;
+    return SecureStore.getItemAsync(key);
+  },
+  async set(key: string, value: string): Promise<void> {
+    if (Platform.OS === 'web') { memory.set(key, value); return; }
+    await SecureStore.setItemAsync(key, value, { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
+  },
+  async del(key: string): Promise<void> {
+    if (Platform.OS === 'web') { memory.delete(key); return; }
+    await SecureStore.deleteItemAsync(key);
+  },
+};

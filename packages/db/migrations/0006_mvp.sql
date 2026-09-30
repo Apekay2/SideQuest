@@ -202,6 +202,11 @@ CREATE POLICY pgroup_owner ON posting_group FOR SELECT TO sidequest_app USING (a
 -- tranches exist.
 ALTER TABLE tranche ALTER COLUMN stall_id DROP NOT NULL;
 
+-- Items keep the order the requester wrote them in: the approval sheet's order is fixed
+-- (parity design §2), and a uuid key has no order at all.
+ALTER TABLE line_item ADD COLUMN position bigserial;
+GRANT USAGE, SELECT ON SEQUENCE line_item_position_seq TO sidequest_app;
+
 -- Ladder rung 3 needs the requester's answer stored somewhere the worker can read it.
 ALTER TABLE tranche ADD COLUMN reimbursement_confirmed boolean;
 

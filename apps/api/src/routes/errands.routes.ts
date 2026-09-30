@@ -194,17 +194,27 @@ export default async function errandRoutes(app: FastifyInstance) {
       : q.status === 'open' ? ['draft', 'awaiting_funds', 'open', 'offered']
       : q.status === 'done' ? ['settled', 'cancelled', 'expired']
       : null;
-    const rows = await app.tx(req, (tx) => tx<(ErrandRow & { stall_count: number; stalls_done: number })[]>`
+    const rows = await app.tx(req, (tx) => tx<(ErrandRow & { stall_count: number; stalls_done: number;
+                                                        counterparty_name: string | null; stall_states: string[] | null; eta_at: Date | null })[]>`
       SELECT e.*,
              (SELECT count(*)::int FROM stall s WHERE s.errand_id = e.id) AS stall_count,
              (SELECT count(*)::int FROM stall s WHERE s.errand_id = e.id
-                AND s.status IN ('approved','declined','skipped')) AS stalls_done
+                AND s.status IN ('approved','declined','skipped')) AS stalls_done,
+             (SELECT array_agg(s.status::text ORDER BY s.seq) FROM stall s WHERE s.errand_id = e.id) AS stall_states,
+             (SELECT a.display_name FROM account a
+               WHERE a.id = CASE WHEN e.requester_id = ${actor} THEN e.runner_id ELSE e.requester_id END) AS counterparty_name,
+             (SELECT eta.eta_at FROM errand_eta eta WHERE eta.errand_id = e.id) AS eta_at
         FROM errand e
        WHERE ${role === 'requester' ? tx`e.requester_id = ${actor}` : tx`(e.runner_id = ${actor} OR e.offered_to = ${actor})`}
          ${statuses ? tx`AND e.status = ANY(${statuses as string[]}::errand_status[])` : tx``}
        ORDER BY e.created_at DESC
        LIMIT ${q.limit}`);
-    return { data: rows.map((r): ErrandSummary => summary(r, actor, r.stall_count, r.stalls_done)), next_cursor: null };
+    return {
+      data: rows.map((r): ErrandSummary => summary(r, actor, r.stall_count, r.stalls_done, {
+        counterparty_name: r.counterparty_name, stall_states: (r.stall_states ?? []) as ErrandSummary['stall_states'], eta_at: r.eta_at,
+      })),
+      next_cursor: null,
+    };
   });
 
   app.get('/errands/:id', { preHandler: app.requireAuth }, async (req) => {

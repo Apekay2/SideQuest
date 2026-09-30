@@ -81,7 +81,9 @@ export function startQueues(deps: WorkerDeps, concurrency = 8) {
 
   const stopPoller = startOutboxPoller(deps.sql, KNOWN, async (row) => {
     await queue.add(row.queue, { outboxId: row.id, payload: row.payload }, {
-      jobId: `outbox-${row.id}`,           // dedupes a redelivered claim
+      // Dedupes a redelivered claim. Keyed on the event's uuid, not the bigserial id: a restored
+      // or rebuilt database reissues ids from 1, and BullMQ would silently drop those as seen.
+      jobId: `outbox-${row.eventId ?? row.id}`,
       attempts: 5,
       backoff: { type: 'exponential', delay: 2000 },
       removeOnComplete: 1000,

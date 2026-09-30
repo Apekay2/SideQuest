@@ -157,6 +157,11 @@ export interface ErrandSummary {
   spend_cap_cents: number; spent_cents: number; max_fee_cents: number; agreed_fee_cents: number | null;
   bonus_cents: number; deadline_at: string | null; created_at: string;
   stall_count: number; stalls_done: number; role: 'requester' | 'runner';
+  /** The other party's display name, once there is one. */
+  counterparty_name: string | null;
+  /** Each stall's status in seq order: the live card draws one segment per stall. */
+  stall_states: StallStatus[];
+  eta_at: string | null;
 }
 export interface ErrandDetail extends ErrandSummary {
   notes: string | null;

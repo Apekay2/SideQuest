@@ -25,13 +25,13 @@ const BATCH = 100;
 const LEASE_MS = 30_000;
 export const MAX_ATTEMPTS = 10;
 
-export interface OutboxRow { id: string; queue: string; payload: Record<string, unknown>; attempts: number }
+export interface OutboxRow { id: string; eventId?: string; queue: string; payload: Record<string, unknown>; attempts: number }
 
 export type Dispatch = (row: OutboxRow) => Promise<void>;
 
 /** Claim due rows with a lease. SKIP LOCKED lets several workers drain one table. */
 export async function claim(sql: Sql, opts: { ignoreDelay?: boolean; limit?: number } = {}): Promise<OutboxRow[]> {
-  const rows = await sql<{ id: number; queue: string; payload: Record<string, unknown>; attempts: number }[]>`
+  const rows = await sql<{ id: number; event_id: string; queue: string; payload: Record<string, unknown>; attempts: number }[]>`
     UPDATE outbox_event
        SET claimed_at = now(), attempts = attempts + 1
      WHERE id IN (
@@ -43,8 +43,8 @@ export async function claim(sql: Sql, opts: { ignoreDelay?: boolean; limit?: num
         ORDER BY id
         FOR UPDATE SKIP LOCKED
         LIMIT ${opts.limit ?? BATCH})
-    RETURNING id, queue, payload, attempts`;
-  return rows.map((r) => ({ ...r, id: String(r.id) })).sort((a, b) => Number(a.id) - Number(b.id));
+    RETURNING id, event_id, queue, payload, attempts`;
+  return rows.map(({ event_id, ...r }) => ({ ...r, id: String(r.id), eventId: event_id })).sort((a, b) => Number(a.id) - Number(b.id));
 }
 
 /** Dispatch one claimed row; mark it done, or release/park it on failure. */

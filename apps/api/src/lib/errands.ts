@@ -41,7 +41,10 @@ export function assertRunner(e: ErrandRow, actorId: string) {
   if (e.runner_id !== actorId) throw new AppError(403, 'FORBIDDEN', 'You are not running this errand');
 }
 
-export function summary(e: ErrandRow, actorId: string, stallCount: number, stallsDone: number): ErrandSummary {
+export function summary(
+  e: ErrandRow, actorId: string, stallCount: number, stallsDone: number,
+  extra: { counterparty_name?: string | null; stall_states?: ErrandSummary['stall_states']; eta_at?: Date | null } = {},
+): ErrandSummary {
   return {
     id: e.id, kind: e.kind, status: e.status, title: e.title,
     spend_cap_cents: e.spend_cap_cents, spent_cents: e.spent_cents, max_fee_cents: e.max_fee_cents,
@@ -49,6 +52,9 @@ export function summary(e: ErrandRow, actorId: string, stallCount: number, stall
     deadline_at: e.deadline_at?.toISOString() ?? null, created_at: e.created_at.toISOString(),
     stall_count: stallCount, stalls_done: stallsDone,
     role: e.requester_id === actorId ? 'requester' : 'runner',
+    counterparty_name: extra.counterparty_name ?? null,
+    stall_states: extra.stall_states ?? [],
+    eta_at: extra.eta_at ? extra.eta_at.toISOString() : null,
   };
 }
 
@@ -69,7 +75,8 @@ export async function loadStalls(tx: Tx, errandId: string, storage: StoragePort)
     SELECT i.id, i.stall_id, i.label, i.qty::text AS qty, i.unit, i.price_cents, i.accepted, o.label AS sub_label
       FROM line_item i LEFT JOIN line_item o ON o.id = i.substituted_for
      WHERE i.stall_id = ANY(${sids}::uuid[])
-     ORDER BY i.stall_id, i.substituted_for NULLS FIRST, i.label`;
+     -- The order the requester wrote them in; a substitute takes its original's place.
+     ORDER BY i.stall_id, COALESCE(o.position, i.position), i.position`;
   const evidence = await tx<{ stall_id: string; object_key: string; attempt: number; rejected: boolean }[]>`
     SELECT DISTINCT ON (stall_id) stall_id, object_key, attempt, rejected
       FROM evidence WHERE errand_id = ${errandId} AND kind = 'goods' AND stall_id IS NOT NULL
@@ -133,8 +140,12 @@ export async function loadDetail(tx: Tx, id: string, actorId: string, storage: S
   const stallCount = stalls.length || (await tx<{ n: number }[]>`SELECT count(*)::int AS n FROM stall WHERE errand_id = ${id}`)[0]!.n;
   const done = stalls.filter((s) => s.status === 'approved' || s.status === 'declined' || s.status === 'skipped').length;
 
+  const [eta0] = await tx<{ eta_at: Date | null }[]>`SELECT eta_at FROM errand_eta WHERE errand_id = ${id}`;
+  const other = e.requester_id === actorId ? runner : requester;
   return {
-    ...summary(e, actorId, stallCount, done),
+    ...summary(e, actorId, stallCount, done, {
+      counterparty_name: other?.display_name ?? null, stall_states: stalls.map((s) => s.status), eta_at: eta0?.eta_at ?? null,
+    }),
     notes: isParty ? e.notes : null,
     assignment_mode: e.assignment_mode,
     funding_mode: e.funding_mode,

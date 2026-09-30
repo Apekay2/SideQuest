@@ -41,7 +41,10 @@ export default async function uploadRoutes(app: FastifyInstance) {
       const type = key.endsWith('.png') ? 'image/png' : key.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
       // Served as an attachment-safe image: nosniff is set globally, and nothing here renders
       // as a document (no SVG, no HTML is ever accepted for upload).
-      return reply.type(type).header('Cache-Control', 'private, max-age=60').send(body);
+      // The app shows these from another origin; the signature, not the origin, is the
+      // access control, so this one response relaxes the global same-origin CORP header.
+      return reply.type(type).header('Cache-Control', 'private, max-age=60')
+        .header('Cross-Origin-Resource-Policy', 'cross-origin').send(body);
     });
   });
 }

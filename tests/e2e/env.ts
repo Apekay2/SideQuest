@@ -1,12 +1,20 @@
 // Test environment. Secrets are generated per run and pass the same checks production does.
 
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 const host = process.env.PGHOST ?? 'localhost';
 export const TEST_DB = process.env.TEST_DB ?? 'sq_test';
 export const ADMIN_URL = process.env.TEST_ADMIN_DATABASE_URL
   ?? `postgres://postgres:${process.env.PGPASSWORD ?? 'devpass'}@${host}:5432/${TEST_DB}`;
-export const ROLE_PASSWORD = process.env.APP_ROLE_PASSWORD ?? 'e2e-role-pw';
+// Login roles are cluster-wide, so the migrator's password reset reaches every database on the
+// server. Reuse the dev .env password when there is one, or a test run locks the dev API out.
+function devRolePassword(): string | undefined {
+  try {
+    return /^APP_ROLE_PASSWORD=(.+)$/m.exec(readFileSync(new URL('../../.env', import.meta.url), 'utf8'))?.[1];
+  } catch { return undefined; }
+}
+export const ROLE_PASSWORD = process.env.APP_ROLE_PASSWORD ?? devRolePassword() ?? 'e2e-role-pw';
 export const REDIS_URL = process.env.TEST_REDIS_URL ?? `redis://${process.env.REDIS_HOST ?? 'localhost'}:6379/15`;
 
 const s = () => randomBytes(48).toString('base64url');
