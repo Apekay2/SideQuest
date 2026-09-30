@@ -12,3 +12,5 @@ apps/mobile/ios/
 apps/mobile/android/
 dump.rdb
 .data/
+next-env.d.ts
+*.tsbuildinfo

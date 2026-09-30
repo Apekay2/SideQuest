@@ -27,6 +27,16 @@ export default async function opsRoutes(app: FastifyInstance) {
     app.requireEntitlement(ent),
   ];
 
+  // What escrow holds for an errand, from the ledger: the number a ruling must split exactly.
+  const heldCents = async (tx: Tx, errandId: string) => {
+    const [r] = await tx<{ held: number }[]>`
+      SELECT COALESCE(sum(p.amount_cents), 0)::bigint AS held FROM posting p JOIN posting_group g ON g.id = p.group_id
+       WHERE g.errand_id = ${errandId} AND p.account = 'escrow_hold'`;
+    return r!.held;
+  };
+
+  const canSeeLedger = (req: FastifyRequest) => req.actor!.entitlements.includes('ledger.read');
+
   const audit = (req: FastifyRequest, tx: Tx, action: string, subject: string, meta?: Record<string, unknown>) => tx`
     INSERT INTO audit_log (actor_id, action, subject, meta)
     VALUES (${req.actor!.id}, ${action}, ${subject}, ${tx.json({ ...(meta ?? {}), ip: req.trustedIp, request_id: req.id } as never)})`;
@@ -104,12 +114,18 @@ export default async function opsRoutes(app: FastifyInstance) {
   // ─────────────────────────────────────────── disputes
 
   app.get('/ops/disputes', { preHandler: gate('ops.read') }, async (req) => {
-    const q = parse(z.object({ status: z.enum(['open', 'evidence', 'ruled', 'closed']).default('open') }), req.query);
+    // 'awaiting' is the ruling queue: a dispute moves from open to evidence as soon as the
+    // worker freezes escrow, and a filter on 'open' alone would hide nearly all of them.
+    const q = parse(z.object({ status: z.enum(['awaiting', 'open', 'evidence', 'ruled', 'closed']).default('awaiting') }), req.query);
+    const statuses = q.status === 'awaiting' ? ['open', 'evidence'] : [q.status];
     const rows = await app.opsTx(req, (tx) => tx`
       SELECT d.id, d.errand_id, d.reason, d.status, d.created_at, e.title, e.kind, e.status AS errand_status,
-             extract(epoch FROM now() - d.created_at)::int AS age_seconds
+             extract(epoch FROM now() - d.created_at)::int AS age_seconds,
+             -- Postings are ledger.read under RLS; without it this would read as a false zero.
+             CASE WHEN ${canSeeLedger(req)} THEN (SELECT COALESCE(sum(p.amount_cents), 0)::bigint FROM posting p JOIN posting_group g ON g.id = p.group_id
+               WHERE g.errand_id = d.errand_id AND p.account = 'escrow_hold') END AS held_cents
         FROM dispute d JOIN errand e ON e.id = d.errand_id
-       WHERE d.status = ${q.status} ORDER BY d.created_at ASC LIMIT 100`);
+       WHERE d.status::text = ANY(${statuses}::text[]) ORDER BY d.created_at ASC LIMIT 100`);
     return { data: rows };
   });
 
@@ -131,12 +147,14 @@ export default async function opsRoutes(app: FastifyInstance) {
       const items = await tx`SELECT i.stall_id, i.label, i.qty::text, i.unit, i.price_cents, i.accepted, i.substituted_for
                                FROM line_item i JOIN stall s ON s.id = i.stall_id WHERE s.errand_id = ${d.errand_id}`;
       const messages = await tx`SELECT sender_id, body, created_at FROM message WHERE errand_id = ${d.errand_id} ORDER BY created_at`;
+      const held = canSeeLedger(req) ? await heldCents(tx, d.errand_id) : null;
       await audit(req, tx, 'dispute.evidence_view', id);
-      return { d, e, evidence, stalls, items, messages };
+      return { d, e, evidence, stalls, items, messages, held };
     });
     return {
       dispute: pack.d,
       errand: pack.e,
+      escrow_cents: pack.held,
       stalls: pack.stalls,
       items: pack.items,
       messages: pack.messages,
@@ -159,11 +177,9 @@ export default async function opsRoutes(app: FastifyInstance) {
       }
       // The split must equal what escrow holds. The worker checks again against the ledger
       // before posting, and parks the ruling for a human if the two disagree.
-      const [esc] = await tx<{ held: number }[]>`
-        SELECT COALESCE(sum(p.amount_cents), 0)::bigint AS held FROM posting p JOIN posting_group g ON g.id = p.group_id
-         WHERE g.errand_id = ${d.errand_id} AND p.account = 'escrow_hold'`;
-      if (body.requester_cents + body.runner_cents !== esc!.held) {
-        throw new AppError(400, 'SPLIT_MISMATCH', 'The split must add up to the frozen escrow', { escrow_cents: esc!.held });
+      const held = await heldCents(tx, d.errand_id);
+      if (body.requester_cents + body.runner_cents !== held) {
+        throw new AppError(400, 'SPLIT_MISMATCH', 'The split must add up to the frozen escrow', { escrow_cents: held });
       }
       if (!e!.runner_id && body.runner_cents > 0) throw new AppError(400, 'VALIDATION', 'There is no runner to pay');
       const [r] = await tx<{ id: string }[]>`
@@ -180,8 +196,10 @@ export default async function opsRoutes(app: FastifyInstance) {
 
   app.get('/ops/rulings', { preHandler: gate('ops.read') }, async (req) => {
     const rows = await app.opsTx(req, (tx) => tx`
-      SELECT r.id, r.dispute_id, r.officer_id, r.outcome, r.requester_cents, r.runner_cents, r.rationale, r.created_at,
-             d.errand_id FROM ruling r JOIN dispute d ON d.id = r.dispute_id ORDER BY r.created_at DESC LIMIT 200`);
+      SELECT r.id, r.dispute_id, r.officer_id, o.display_name AS officer_name, r.outcome, r.requester_cents,
+             r.runner_cents, r.rationale, r.created_at, d.errand_id, d.reason
+        FROM ruling r JOIN dispute d ON d.id = r.dispute_id JOIN account o ON o.id = r.officer_id
+       ORDER BY r.created_at DESC LIMIT 200`);
     return { data: rows };
   });
 

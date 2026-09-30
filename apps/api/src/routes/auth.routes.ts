@@ -132,6 +132,11 @@ export default async function authRoutes(app: FastifyInstance) {
       let [account] = await tx<AccountRow[]>`
         SELECT id, display_name, role, verification_tier, language, market, staff_grants, suspended_at FROM account`;
 
+      // One answer for "no account" and "not staff", so the console cannot be used to learn
+      // which numbers are registered.
+      if (body.staff_only && account?.role !== 'staff') {
+        throw new AppError(403, 'NOT_STAFF', 'This number has no console access');
+      }
       if (!account) {
         let displayName = 'Mwanachama';
         if (body.display_name) {

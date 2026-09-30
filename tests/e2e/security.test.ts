@@ -362,6 +362,31 @@ describe('sessions', () => {
     expect([400, 429]).toContain(res.status);
   });
 
+  test('console sign-in (staff_only) never creates an account and admits only staff, with one answer for both', async () => {
+    const attempt = async (msisdn: string) => {
+      const anon = w.anon();
+      const otp = await anon.post('/auth/otp', { msisdn }, { idem: false });
+      const code = /(\d{6})/.exec(w.sms().outbox.at(-1)!.text)![1]!;
+      return anon.post('/auth/verify', { challenge_id: otp.body.challenge_id, code, staff_only: true }, { idem: false });
+    };
+    const stranger = `07${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
+    const none = await attempt(stranger);
+    const [created] = await w.admin`SELECT count(*)::int AS n FROM account WHERE msisdn = ${`+254${stranger.slice(1)}`}`;
+    expect(created.n).toBe(0);
+
+    const customer = await w.requester('Curious Carol');
+    const notStaff = await attempt(`0${customer.msisdn.slice(4)}`);
+    expect([none.status, notStaff.status]).toEqual([403, 403]);
+    expect(none.body.code).toBe('NOT_STAFF');
+    expect(notStaff.body).toMatchObject({ code: none.body.code, title: none.body.title });
+    expect(notStaff.body.access).toBeUndefined();
+
+    const officer = await w.staff(['ops.read']);
+    const ok = await attempt(`0${officer.msisdn.slice(4)}`);
+    expect(ok.status).toBe(200);
+    expect(ok.body.account.role).toBe('staff');
+  });
+
   test('a revoked session stops money moving immediately, not in 15 minutes', async () => {
     const u = await w.requester('Logout Lucy');
     await w.topUp(u, 10_000);

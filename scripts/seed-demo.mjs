@@ -10,42 +10,11 @@
 // with SMS_DRIVER=console. The one shortcut is promoting the demo runner to tier 3 in SQL, as
 // an ops reviewer would; it needs MIGRATE_DATABASE_URL (the owner connection) from .env.
 
-import { readFileSync } from 'node:fs';
-import { randomUUID } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { call, signInWith, sql, sleep, topUp } from './lib/seed-client.mjs';
 
-const API = process.env.API_URL ?? 'http://localhost:3000';
 const LOG = process.argv[2];
 if (!LOG) { console.error('usage: node scripts/seed-demo.mjs <api-log-path>'); process.exit(2); }
-
-const env = Object.fromEntries(readFileSync(new URL('../.env', import.meta.url), 'utf8')
-  .split('\n').filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-async function call(method, path, token, body) {
-  const res = await fetch(API + path, {
-    method,
-    headers: { 'content-type': 'application/json', 'idempotency-key': randomUUID(), ...(token ? { authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? (method === 'GET' ? undefined : '{}') : JSON.stringify(body),
-  });
-  const text = await res.text();
-  const json = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new Error(`${method} ${path} → ${res.status} ${text}`);
-  return json;
-}
-
-async function signIn(msisdn, role, name) {
-  const { challenge_id } = await call('POST', '/auth/otp', null, { msisdn });
-  await sleep(300);
-  const tail = readFileSync(LOG, 'utf8').split('\n').reverse().find((l) => l.includes(`…${msisdn.slice(-3)}`) && /code is \d{6}/.test(l));
-  const code = /code is (\d{6})/.exec(tail ?? '')?.[1];
-  if (!code) throw new Error('OTP not found in the API log — is SMS_DRIVER=console?');
-  return call('POST', '/auth/verify', null, { challenge_id, code, role, display_name: name });
-}
-
-function sql(q) {
-  execFileSync('psql', [env.MIGRATE_DATABASE_URL, '-q', '-c', q], { stdio: 'pipe' });
-}
+const signIn = signInWith(LOG);
 
 const amina = await signIn('0711000001', 'requester', 'Amina');
 const peter0 = await signIn('0711000002', 'runner', 'Peter K');
@@ -53,8 +22,7 @@ sql(`UPDATE account SET verification_tier = 3 WHERE id = '${peter0.account.id}';
      INSERT INTO kyc_case (account_id, target_tier, status, movement_consent) VALUES ('${peter0.account.id}', 3, 'approved', true);`);
 const peter = await call('POST', '/auth/refresh', null, { refresh: peter0.refresh });
 
-await call('POST', '/wallet/topup', amina.access, { amount_cents: 300_000 });
-for (let i = 0; i < 20; i++) { await sleep(500); if ((await call('GET', '/wallet', amina.access)).balance_cents >= 300_000) break; }
+await topUp(amina.access, 300_000);
 
 const e = await call('POST', '/errands', amina.access, {
   kind: 'market_run', title: 'Kangemi Market run', notes: 'Firm tomatoes please.',

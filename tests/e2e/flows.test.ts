@@ -224,6 +224,8 @@ describe('disputes and Legal Operations', () => {
     expect(pack.status).toBe(200);
     const [audited] = await w.admin`SELECT count(*)::int AS n FROM audit_log WHERE action = 'dispute.evidence_view' AND subject = ${d.body.id}`;
     expect(audited.n).toBe(1);
+    // No ledger.read: the escrow figure is withheld, not reported as zero.
+    expect(pack.body.escrow_cents).toBeNull();
 
     const ruling = { outcome: 'split', requester_cents: 0, runner_cents: 0, rationale: 'Runner started and went silent; requester refunded all but the time already spent.' };
     // Without legal_ops, refused at the gateway.
@@ -233,6 +235,12 @@ describe('disputes and Legal Operations', () => {
     const held = (await officer.client.get(`/ops/errands/${e.id}/trace`)).body.postings
       .filter((p: any) => p.account === 'escrow_hold').reduce((a: number, p: any) => a + p.amount_cents, 0);
     expect(held).toBeGreaterThan(0);
+    // The console draws the split arithmetic from these; both must agree with the ledger.
+    expect((await officer.client.get(`/ops/disputes/${d.body.id}/evidence`)).status).toBe(403);   // no evidence.view
+    const officerPack = await (await w.staff(['ops.read', 'ledger.read', 'evidence.view'])).client.get(`/ops/disputes/${d.body.id}/evidence`);
+    expect(officerPack.body.escrow_cents).toBe(held);
+    const listed = (await officer.client.get('/ops/disputes')).body.data.find((x: any) => x.id === d.body.id);
+    expect(listed.held_cents).toBe(held);
     // A split that does not add up to the escrow is refused.
     expect((await officer.client.post(`/ops/disputes/${d.body.id}/rule`, { ...ruling, requester_cents: held - 1, runner_cents: 5_000 })).status).toBe(400);
     // A short rationale is refused.
@@ -240,6 +248,8 @@ describe('disputes and Legal Operations', () => {
 
     const ok = await officer.client.post(`/ops/disputes/${d.body.id}/rule`, { ...ruling, requester_cents: held - 5_000, runner_cents: 5_000 });
     expect(ok.status).toBe(201);
+    const [logged] = (await officer.client.get('/ops/rulings')).body.data;
+    expect(logged).toMatchObject({ dispute_id: d.body.id, officer_name: 'Ops Officer', outcome: 'split', reason: 'no_show' });
     await w.settle();
     expect((await run.client.get('/earnings')).body.available_cents).toBe(5_000);
     const after = await req.client.get(`/errands/${e.id}`);

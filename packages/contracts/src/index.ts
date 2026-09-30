@@ -41,6 +41,8 @@ export const OtpVerify = z.object({
   device_id: z.string().min(8).max(128).optional(),
   role: Role.optional(),
   display_name: z.string().min(1).max(48).optional(),
+  /** The ops console sets this: never create an account, and issue a session only to staff. */
+  staff_only: z.boolean().optional(),
 });
 export const RefreshRequest = z.object({ refresh: z.string().min(20).max(200).optional() });
 export const PatchMe = z.object({
