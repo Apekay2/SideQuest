@@ -9,8 +9,8 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
-    "migrate": "tsx scripts/migrate.ts",
-    "gates": "tsx scripts/assert-rls-coverage.ts && tsx scripts/assert-currency-invariants.ts"
+    "migrate": "tsx --env-file-if-exists=../../.env scripts/migrate.ts",
+    "gates": "tsx scripts/assert-rls-coverage.ts && tsx scripts/assert-currency-invariants.ts && tsx scripts/assert-ledger-grants.ts"
   },
   "dependencies": {
     "@sidequest/domain": "workspace:*",

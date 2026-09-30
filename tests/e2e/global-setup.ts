@@ -19,7 +19,8 @@ export default async function setup() {
 
   const here = dirname(fileURLToPath(import.meta.url));
   execFileSync('npx', ['tsx', join(here, '../../packages/db/scripts/migrate.ts')], {
-    env: { ...process.env, DATABASE_URL: ADMIN_URL, APP_ROLE_PASSWORD: ROLE_PASSWORD, NODE_ENV: 'test' },
+    // Both names: the migrator prefers MIGRATE_DATABASE_URL, which a dev shell may have exported.
+    env: { ...process.env, DATABASE_URL: ADMIN_URL, MIGRATE_DATABASE_URL: ADMIN_URL, APP_ROLE_PASSWORD: ROLE_PASSWORD, NODE_ENV: 'test' },
     stdio: 'pipe',
   });
 

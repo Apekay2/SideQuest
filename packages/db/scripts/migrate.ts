@@ -2,7 +2,9 @@
 // Forward-only migration runner. Applies every numbered file in ../migrations that is not yet
 // recorded in schema_migrations, in order, each file as one unit. Never edits or reverts.
 //
-//   DATABASE_URL          owner/superuser connection (migrations own the schema)
+//   MIGRATE_DATABASE_URL  owner/superuser connection (migrations own the schema); falls back
+//                         to DATABASE_URL, which is what CI and the container job pass. In the
+//                         dev .env, DATABASE_URL is the app role and cannot migrate.
 //   APP_ROLE_PASSWORD     optional; when set outside production, the three login roles get
 //                         this password so local dev and CI can connect as them.
 
@@ -12,10 +14,11 @@ import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const url = process.env.DATABASE_URL;
+const url = process.env.MIGRATE_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!url) { console.error('DATABASE_URL required'); process.exit(2); }
 
-const dir = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
+// Bundled into the worker image, the file no longer sits next to migrations/; the image says where.
+const dir = process.env.MIGRATIONS_DIR ?? join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
 const sql = postgres(url, { max: 1, onnotice: () => {} });
 
 await sql`
