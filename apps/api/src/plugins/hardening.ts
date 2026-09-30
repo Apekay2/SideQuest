@@ -13,12 +13,22 @@
 import fp from 'fastify-plugin';
 import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
-import { config, isProd } from '@sidequest/config';
+import { scrub } from '@sidequest/observability';
 import { AppError } from './errors.js';
 
 export default fp(async function hardening(app: FastifyInstance) {
-  const cfg = config();
+  const cfg = app.deps.cfg;
   const origins = cfg.ALLOWED_ORIGINS;
+  const isProd = () => cfg.NODE_ENV === 'production';
+
+  // ── Client IP. Behind our own load balancer the right-most TRUSTED_PROXY_HOPS entries of
+  // X-Forwarded-For were appended by infrastructure we control; the entry just before them is
+  // the client. Anything further left is client-supplied and spoofable, so it is ignored.
+  app.addHook('onRequest', async (req) => {
+    const xff = String(req.headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+    const hops = cfg.TRUSTED_PROXY_HOPS;
+    req.trustedIp = hops > 0 && xff.length >= hops ? xff[xff.length - hops]! : req.socket.remoteAddress ?? 'unknown';
+  });
 
   // ── CORS. An allowlist, echoed back only on an exact match. `origin: true` (reflect
   // anything) with credentials is the single most common way a marketplace API hands an
@@ -31,7 +41,8 @@ export default fp(async function hardening(app: FastifyInstance) {
     }
     reply.header('Access-Control-Allow-Origin', origin);
     reply.header('Access-Control-Allow-Credentials', 'true');
-    reply.header('Access-Control-Allow-Headers', 'authorization,content-type,idempotency-key');
+    reply.header('Access-Control-Allow-Headers', 'authorization,content-type,idempotency-key,x-device-id');
+    reply.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
     reply.header('Access-Control-Max-Age', '600');
     reply.header('Vary', 'Origin');
   });
@@ -84,6 +95,12 @@ export default fp(async function hardening(app: FastifyInstance) {
   });
 
   // ── Cookies. One policy, applied by one helper, so no route can set a weaker one.
+  app.setNotFoundHandler((_req, reply) => {
+    reply.type('application/problem+json').code(404).send({
+      type: 'https://api.sidequest.co.ke/errors/NOT_FOUND', title: 'Not found', status: 404, code: 'NOT_FOUND',
+    });
+  });
+
   app.decorate('setRefreshCookie', (reply: any, token: string) => {
     reply.setCookie('sq_refresh', token, {
       httpOnly: true,                 // XSS cannot read it
@@ -99,49 +116,44 @@ export default fp(async function hardening(app: FastifyInstance) {
     reply.clearCookie('sq_refresh', { path: '/auth', domain: cfg.COOKIE_DOMAIN });
   });
 
-  // ── Session binding. A token lifted from one device should not work from another. Not
-  // absolute (a matatu roams between cell networks, so the IP is advisory only), but the
-  // device fingerprint and the session family are checked hard.
-  app.decorate('assertSessionIntegrity', async (req: any) => {
-    const s = req.session;                       // loaded by the auth plugin from `session`
-    if (!s) throw new AppError(401, 'NO_SESSION', 'Sign in again');
-    if (s.revokedAt) throw new AppError(401, 'SESSION_REVOKED', 'Sign in again');
-    if (s.expiresAt <= new Date()) throw new AppError(401, 'SESSION_EXPIRED', 'Sign in again');
+  // Session binding (device id, revocation, family) lives in auth.ts as
+  // assertSessionIntegrity, next to the code that issues the session.
 
-    // Device binding: the refresh token is issued against a device key the app holds in
-    // Keystore/Keychain. A mismatch revokes the whole family — this is the control that
-    // turns a successful token theft into one failed request.
-    if (req.headers['x-device-id'] && s.deviceId && req.headers['x-device-id'] !== s.deviceId) {
-      req.log.warn({ session: s.id }, 'device mismatch; revoking session family');
-      await app.repos.sessions.revokeFamily(s.familyId, 'device_mismatch');
-      throw new AppError(401, 'SESSION_REVOKED', 'Sign in again');
-    }
-
-    // Sudden country change on a money path is worth a step-up, not a block.
-    if (req.routeOptions?.config?.money && s.lastCountry && req.geoCountry
-        && s.lastCountry !== req.geoCountry) {
-      throw new AppError(401, 'REAUTH_REQUIRED', 'Confirm it is you');
-    }
-  });
+  // ── Preflight. Fastify has no route for OPTIONS; the CORS hook above has already checked
+  // the origin and set the headers by the time this answers.
+  app.options('/*', async (_req, reply) => reply.code(204).send());
 
   // ── Error scrubbing. Two things leak here in practice: a provider message quoted verbatim
   // (which tells a card tester exactly which BIN check failed), and a stack trace naming
   // internal hosts. §7.7 forbids both; this is where it is enforced rather than hoped for.
-  app.setErrorHandler((err: any, req, reply) => {
+  // Domain errors carry a stable `code`; they are client errors, not faults, and are mapped
+  // here once rather than caught in every handler.
+  const DOMAIN_STATUS: Record<string, number> = {
+    ERRAND_STATE_INVALID: 409, SPEND_CAP_EXCEEDED: 409, TIER_REQUIRED: 403, INVALID_TEXT: 400,
+    LEDGER_UNBALANCED: 409, LEDGER_NEGATIVE_AMOUNT: 400, MPESA_WHOLE_SHILLINGS: 400,
+  };
+
+  app.setErrorHandler((rawErr: any, req, reply) => {
+    const err = rawErr?.code && DOMAIN_STATUS[rawErr.code] && !(rawErr instanceof AppError)
+      ? new AppError(DOMAIN_STATUS[rawErr.code]!, rawErr.code, rawErr.message)
+      : rawErr;
     const isApp = err instanceof AppError;
     const status = isApp ? err.status : (err.statusCode && err.statusCode < 500 ? err.statusCode : 500);
+    // Framework 4xx (malformed JSON, body too large) get a stable code instead of INTERNAL.
+    const code = isApp ? err.code : status === 400 ? 'VALIDATION' : status === 413 ? 'BODY_TOO_LARGE'
+      : status === 404 ? 'NOT_FOUND' : status < 500 ? 'BAD_REQUEST' : 'INTERNAL';
     if (status >= 500) req.log.error({ err }, 'unhandled');
 
     reply.type('application/problem+json').code(status).send({
-      type: `https://api.sidequest.co.ke/errors/${isApp ? err.code : 'INTERNAL'}`,
-      title: isApp ? err.message : 'Something went wrong on our side',
+      type: `https://api.sidequest.co.ke/errors/${code}`,
+      title: isApp ? err.message : status < 500 ? 'The request could not be processed' : 'Something went wrong on our side',
       status,
-      code: isApp ? err.code : 'INTERNAL',
+      code,
       // Only AppError details are ever echoed, and only after passing through the same
       // scrubber the logs use, so an msisdn or a lat/lng cannot ride out on an error.
-      ...(isApp && err.details ? { details: app.scrub(err.details) } : {}),
+      ...(isApp && err.details ? { details: scrub(err.details) } : {}),
       request_id: req.id,
-      ...(isProd() ? {} : { debug: String(err?.message ?? '') }),
+      ...(isProd() || isApp ? {} : { debug: String(err?.message ?? '') }),
     });
   });
 

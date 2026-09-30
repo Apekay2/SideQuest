@@ -1,0 +1,32 @@
+{
+  "name": "@sidequest/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsup src/index.ts --format esm --target node22 --out-dir dist --noExternal @sidequest",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/websocket": "^11.3.1",
+    "@sidequest/adapters": "workspace:*",
+    "@sidequest/config": "workspace:*",
+    "@sidequest/contracts": "workspace:*",
+    "@sidequest/db": "workspace:*",
+    "@sidequest/domain": "workspace:*",
+    "@sidequest/observability": "workspace:*",
+    "fastify": "^5.12.5",
+    "fastify-plugin": "^6.0.0",
+    "ioredis": "^6.0.0",
+    "jose": "^6.2.12",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2",
+    "tsup": "^8.5.1"
+  }
+}

@@ -9,17 +9,18 @@
 
 import fp from 'fastify-plugin';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { metrics } from '@sidequest/observability';
 import { AppError } from './errors.js';
 
 export interface Limit {
   /** Bucket name; appears in metrics and in the 429 body. */
-  name: string;
-  max: number;
-  windowSeconds: number;
+  readonly name: string;
+  readonly max: number;
+  readonly windowSeconds: number;
   /** What we count per. Keep it as narrow as the abuse it prevents. */
-  by: 'account' | 'ip' | 'msisdn' | 'errand' | 'account+errand';
+  readonly by: 'account' | 'ip' | 'msisdn' | 'errand' | 'account+errand';
   /** Fail closed (money, OTP, KYC) or fail open (read paths) when Redis is unavailable. */
-  onRedisDown: 'deny' | 'allow';
+  readonly onRedisDown: 'deny' | 'allow';
 }
 
 // The registry IS the policy. §7.7 of the security doc quotes this table; if you change a
@@ -74,19 +75,24 @@ function bucketKey(limit: Limit, req: FastifyRequest): string {
 }
 
 export default fp(async function rateLimit(app: FastifyInstance) {
-  const sha = await app.redis.scriptLoad(SCRIPT);
+  const redis = app.deps.redis;
+  // Registered as a named command: ioredis sends EVALSHA and falls back to EVAL on NOSCRIPT,
+  // so a Redis restart that flushes the script cache does not turn into a 503 storm.
+  redis.defineCommand('sqSlidingWindow', { numberOfKeys: 1, lua: SCRIPT });
 
   async function check(limit: Limit, req: FastifyRequest, reply: FastifyReply) {
     let admitted: boolean, remaining = 0, retryAfter = 0;
     try {
-      const [ok, rem, retry] = await app.redis.evalSha(sha, {
-        keys: [bucketKey(limit, req)],
-        arguments: [String(Date.now()), String(limit.windowSeconds), String(limit.max), req.id],
-      }) as [number, number, number];
+      // The member must be unique per call, not per request: one request can pass through
+      // two limits that share a bucket, and ZADD with a repeated member counts once.
+      const member = `${req.id}:${limit.name}:${Math.random().toString(36).slice(2)}`;
+      const [ok, rem, retry] = await (redis as unknown as {
+        sqSlidingWindow(key: string, now: string, window: string, max: string, member: string): Promise<[number, number, number]>;
+      }).sqSlidingWindow(bucketKey(limit, req), String(Date.now()), String(limit.windowSeconds), String(limit.max), member);
       admitted = ok === 1; remaining = rem; retryAfter = retry;
     } catch (err) {
       req.log.error({ err, limit: limit.name }, 'rate limiter unavailable');
-      app.metrics.increment('ratelimit.unavailable', { limit: limit.name });
+      metrics.increment('ratelimit.unavailable', { limit: limit.name });
       // A money or OTP path with no limiter is worse than an outage: deny.
       if (limit.onRedisDown === 'deny') {
         throw new AppError(503, 'RATE_LIMITER_UNAVAILABLE', 'Try again shortly');
@@ -99,7 +105,7 @@ export default fp(async function rateLimit(app: FastifyInstance) {
 
     if (!admitted) {
       reply.header('Retry-After', retryAfter);
-      app.metrics.increment('ratelimit.denied', { limit: limit.name });
+      metrics.increment('ratelimit.denied', { limit: limit.name });
       // No detail about *which* identifier tripped: on the OTP path that would confirm
       // whether a number is registered.
       throw new AppError(429, 'RATE_LIMITED', 'Too many requests', { retry_after_seconds: retryAfter });
@@ -107,7 +113,7 @@ export default fp(async function rateLimit(app: FastifyInstance) {
   }
 
   /** Route-level: `preHandler: app.limit(LIMITS.nearby)`. Stacks with the global limits. */
-  app.decorate('limit', (...limits: Limit[]) =>
+  app.decorate('limit', (...limits: readonly Limit[]) =>
     async (req: FastifyRequest, reply: FastifyReply) => {
       for (const l of limits) await check(l, req, reply);
     });
@@ -116,7 +122,7 @@ export default fp(async function rateLimit(app: FastifyInstance) {
   // the documented 60 writes/min and 300 reads/min per account.
   app.addHook('onRequest', async (req, reply) => {
     if (!req.actor) return;                       // pre-auth paths carry their own limits
-    if (req.url.startsWith('/health')) return;
+    if (req.url.startsWith('/health') || req.url.startsWith('/uploads/')) return;
     const write = req.method !== 'GET' && req.method !== 'HEAD';
     await check(write ? LIMITS.writes : LIMITS.reads, req, reply);
   });
@@ -125,6 +131,9 @@ export default fp(async function rateLimit(app: FastifyInstance) {
   // database at all. Deliberately generous — a shared NAT in a Nairobi office is one IP.
   app.addHook('onRequest', async (req, reply) => {
     if (req.actor) return;
+    // Webhooks are source-checked and must never be refused (a 429 to Safaricom is a retry
+    // storm); signed upload URLs carry their own expiry.
+    if (req.url.startsWith('/webhooks/') || req.url.startsWith('/uploads/') || req.url.startsWith('/health')) return;
     await check({ name: 'anon', max: 120, windowSeconds: 60, by: 'ip', onRedisDown: 'deny' }, req, reply);
   });
 });

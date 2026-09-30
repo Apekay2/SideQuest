@@ -8,7 +8,8 @@ export type ErrandStatus =
 
 export type ErrandEvent =
   | 'publish' | 'fund' | 'offer' | 'offer_lapsed' | 'award' | 'accept' | 'auction_expired'
-  | 'start' | 'arrive' | 'submit_stall' | 'approve_stall' | 'all_stalls_done'
+  | 'start' | 'arrive' | 'submit_stall' | 'approve_stall' | 'decline_stall' | 'reject_photo'
+  | 'all_stalls_done'
   | 'ready_for_handover' | 'handover_scanned' | 'cancel' | 'raise_dispute'
   | 'resolve_dispute' | 'deadline_passed';
 
@@ -46,6 +47,9 @@ const TRANSITIONS: readonly Transition[] = [
   // A second stall can be submitted while the first still waits on the requester.
   { from: 'awaiting_approval', event: 'submit_stall',       to: 'awaiting_approval', by: ['runner'] },
   { from: 'awaiting_approval', event: 'approve_stall',      to: 'shopping',          by: ['requester'] },
+  // A declined stall or a rejected photo hands the basket back to the runner.
+  { from: 'awaiting_approval', event: 'decline_stall',      to: 'shopping',          by: ['requester'] },
+  { from: 'awaiting_approval', event: 'reject_photo',       to: 'shopping',          by: ['requester'] },
   { from: 'awaiting_approval', event: 'all_stalls_done',    to: 'handover',          by: ['system'] },
   { from: 'shopping',          event: 'all_stalls_done',    to: 'handover',          by: ['system'] },
   // Kinds without a basket (queue standing, document drop) have no stalls to resolve; the

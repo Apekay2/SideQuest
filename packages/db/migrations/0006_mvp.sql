@@ -141,6 +141,15 @@ CREATE POLICY ops_tier_account ON account FOR UPDATE TO sidequest_ops
 ALTER TABLE errand ADD COLUMN max_fee_cents bigint NOT NULL DEFAULT 0 CHECK (max_fee_cents >= 0);
 ALTER TABLE errand ADD COLUMN pickup_label text;
 ALTER TABLE errand ADD COLUMN handover_at timestamptz;
+-- The auction window is chosen at posting but starts when the escrow is funded; storing only
+-- the close time would start the clock while the requester is still paying.
+ALTER TABLE errand ADD COLUMN auction_minutes smallint NOT NULL DEFAULT 15
+  CHECK (auction_minutes BETWEEN 5 AND 60);
+
+-- A requester choosing between bids sees each bidder's public profile — name and tier, via
+-- the column grants above, never msisdn — and nobody else's.
+CREATE POLICY account_bidder ON account FOR SELECT TO sidequest_app
+  USING (EXISTS (SELECT 1 FROM bid b WHERE b.runner_id = account.id AND app_is_requester(b.errand_id)));
 
 -- Tier-2 runners bid (entitlement bid.place) but the feed policy admitted only errand.accept
 -- (tier 3), so a tier-2 runner could never see anything to bid on.
@@ -231,7 +240,7 @@ BEGIN
   END LOOP;
 END $$;
 
-GRANT SELECT, INSERT, UPDATE ON idempotency_key TO sidequest_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON idempotency_key TO sidequest_app;
 CREATE POLICY idem_own ON idempotency_key FOR ALL TO sidequest_app
   USING (account_id = app_actor()) WITH CHECK (account_id = app_actor());
 GRANT SELECT, DELETE ON idempotency_key TO sidequest_worker;
@@ -261,9 +270,14 @@ CREATE POLICY ops_sos ON sos_case FOR ALL TO sidequest_ops USING (app_has_ent('o
 -- kyc_case is deliberately absent: identity documents stay out of the worker's reach.
 GRANT SELECT, UPDATE ON errand, stall, errand_fee, errand_offer, errand_link, runner_location,
                         dispute TO sidequest_worker;
-GRANT SELECT ON line_item, bid, account, errand_checkpoint, ruling, message TO sidequest_worker;
+GRANT SELECT ON line_item, bid, account, ruling, message TO sidequest_worker;
+GRANT SELECT, INSERT ON errand_checkpoint TO sidequest_worker;
+GRANT USAGE, SELECT ON SEQUENCE errand_checkpoint_id_seq TO sidequest_worker;
 GRANT SELECT, INSERT, UPDATE ON relationship, errand_eta TO sidequest_worker;
 GRANT INSERT ON outbox_event TO sidequest_worker;
+-- A requester's retake request is recorded as rejected by the worker; the app role's access
+-- to evidence stays SELECT/INSERT, so a party can never rewrite the evidence pack.
+GRANT SELECT, UPDATE (rejected) ON evidence TO sidequest_worker;
 GRANT UPDATE ON notification TO sidequest_worker;
 GRANT SELECT ON notification TO sidequest_worker;
 
@@ -277,12 +291,13 @@ CREATE POLICY w_link       ON errand_link       FOR ALL    TO sidequest_worker U
 CREATE POLICY w_loc        ON runner_location   FOR ALL    TO sidequest_worker USING (true) WITH CHECK (true);
 CREATE POLICY w_dispute    ON dispute           FOR ALL    TO sidequest_worker USING (true) WITH CHECK (true);
 CREATE POLICY w_account    ON account           FOR SELECT TO sidequest_worker USING (true);
-CREATE POLICY w_checkpoint ON errand_checkpoint FOR SELECT TO sidequest_worker USING (true);
+CREATE POLICY w_checkpoint ON errand_checkpoint FOR ALL    TO sidequest_worker USING (true) WITH CHECK (true);
 CREATE POLICY w_ruling     ON ruling            FOR SELECT TO sidequest_worker USING (true);
 CREATE POLICY w_message    ON message           FOR SELECT TO sidequest_worker USING (true);
 CREATE POLICY w_rel        ON relationship      FOR ALL    TO sidequest_worker USING (true) WITH CHECK (true);
 CREATE POLICY w_eta        ON errand_eta        FOR ALL    TO sidequest_worker USING (true) WITH CHECK (true);
 CREATE POLICY w_notif      ON notification      FOR ALL    TO sidequest_worker USING (true) WITH CHECK (true);
+CREATE POLICY w_evidence   ON evidence          FOR ALL    TO sidequest_worker USING (true) WITH CHECK (true);
 
 -- ─────────────────────────────────────────────── 8. ops reach
 

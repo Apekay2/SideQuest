@@ -1,83 +1,61 @@
 // apps/api/src/plugins/actor-context.ts
-// Binds every database transaction to the authenticated actor, so RLS (0003_rls.sql) has
-// something to enforce. This plugin is what makes the policies real; without it every policy
-// evaluates app_actor() = NULL and the API returns zero rows for everything — which is the
-// correct failure direction, and is asserted by a test.
+// Binds every database transaction to the authenticated actor, so RLS (0003_rls.sql, 0006)
+// has something to enforce. This plugin is what makes the policies real; without it every
+// policy evaluates app_actor() = NULL and the API returns zero rows for everything — which is
+// the correct failure direction, and is asserted by a test.
 //
 // Two rules that are not negotiable:
 //   1. SET LOCAL, never SET. Under PgBouncer transaction pooling a plain SET outlives the
 //      request and the next borrower of that connection inherits the previous actor.
 //   2. set_config(name, value, true) with bound parameters. Never string-interpolate the
 //      actor into SQL — a GUC assignment is a SQL statement like any other.
+// Both live in packages/db withActor(), which the worker and the tests share.
+//
+// There is no raw pool on the Fastify instance at all. The old version shadowed
+// `app.db.transaction` with a throwing proxy; here the pool is simply not reachable from a
+// route, so an unscoped transaction is not a runtime error but an impossibility.
 
 import fp from 'fastify-plugin';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { sql } from 'drizzle-orm';
-
-export interface Actor {
-  id: string;
-  role: 'requester' | 'runner' | 'staff';
-  tier: 0 | 1 | 2 | 3;
-  entitlements: readonly string[];
-  sessionId: string;
-}
-
-const ENT_RE = /^[a-z0-9_.]{1,48}$/;
-
-/** Defence in depth: entitlements travel into a GUC as a comma-joined string, so a value
- *  containing a comma would forge a second entitlement. Reject rather than escape. */
-function encodeEntitlements(ents: readonly string[]): string {
-  const clean = ents.filter((e) => ENT_RE.test(e));
-  if (clean.length !== ents.length) throw new Error('Malformed entitlement in session claims');
-  return clean.join(',');
-}
+import { withActor, type Tx, type ScopeOptions } from '@sidequest/db';
+import { AppError } from './errors.js';
 
 export default fp(async function actorContext(app: FastifyInstance) {
-  /**
-   * The only sanctioned way to touch the database inside a request. `app.db.transaction` is
-   * deliberately NOT exposed to route code any more (see the shadowing below) — an
-   * unscoped transaction is an unauthenticated one.
-   */
-  app.decorate('tx', async function tx<T>(
-    req: FastifyRequest,
-    fn: (t: any) => Promise<T>,
-    opts: { discovery?: boolean; otpChallengeId?: string } = {},
-  ): Promise<T> {
-    const actor = req.actor as Actor | undefined;
+  const { sql, opsSql, redis } = app.deps;
 
-    return app.dbRaw.transaction(async (t: any) => {
-      if (actor) {
-        await t.execute(sql`SELECT set_config('app.actor_id',      ${actor.id},   true)`);
-        await t.execute(sql`SELECT set_config('app.actor_role',    ${actor.role}, true)`);
-        await t.execute(sql`SELECT set_config('app.entitlements',
-                              ${encodeEntitlements(actor.entitlements)}, true)`);
-        await t.execute(sql`SELECT set_config('app.session_id',    ${actor.sessionId}, true)`);
+  app.decorate('tx', function tx<T>(req: FastifyRequest, fn: (t: Tx) => Promise<T>, opts: ScopeOptions = {}): Promise<T> {
+    if (opts.discovery) req.log.debug({ actor: req.actor?.id }, 'discovery scope opened');
+    return withActor(sql, req.actor ?? null, fn, opts).catch((err: { code?: string }) => {
+      // Two approvals racing under SERIALIZABLE: one loses with 40001. That is a retryable
+      // conflict for the client, not a server fault.
+      if (err?.code === '40001' || err?.code === '40P01') {
+        throw new AppError(409, 'CONCURRENT_UPDATE', 'Someone else changed this at the same moment. Try again.');
       }
-      // Purpose-scoped widenings. Both are single-statement in practice and both are logged.
-      if (opts.discovery) {
-        await t.execute(sql`SELECT set_config('app.discovery', 'on', true)`);
-        req.log.debug({ actor: actor?.id }, 'discovery scope opened');
-      }
-      if (opts.otpChallengeId) {
-        await t.execute(sql`SELECT set_config('app.otp_challenge_id', ${opts.otpChallengeId}, true)`);
-      }
-      // Statement timeout inside the request path: a policy subquery on a bad plan must not
-      // hold a pooled connection open. Money transactions raise it explicitly.
-      await t.execute(sql`SET LOCAL statement_timeout = '5s'`);
-      await t.execute(sql`SET LOCAL idle_in_transaction_session_timeout = '10s'`);
-      return fn(t);
+      throw err;
     });
   });
 
-  // Shadow the raw handle so `app.db.transaction(...)` in a route is a type error rather than
-  // a silent RLS bypass. Anything that genuinely needs an unscoped transaction (migrations,
-  // reconciliation) runs in the worker under sidequest_worker, not here.
-  app.decorate('db', new Proxy({}, {
-    get(_t, prop) {
-      if (prop === 'transaction') {
-        throw new Error('Use app.tx(req, fn) — a bare transaction has no actor and RLS will return nothing');
-      }
-      return (app.dbRaw as any)[prop];
-    },
-  }));
+  app.decorate('opsTx', function opsTx<T>(req: FastifyRequest, fn: (t: Tx) => Promise<T>): Promise<T> {
+    if (!req.actor || req.actor.role !== 'staff') throw new AppError(403, 'FORBIDDEN', 'Staff only');
+    return withActor(opsSql, req.actor, fn);
+  });
+
+  app.decorate('audit', async function audit(
+    req: FastifyRequest,
+    entry: { action: string; subject: string; meta?: Record<string, unknown> },
+    tx?: Tx,
+  ) {
+    const write = (t: Tx) => t`
+      INSERT INTO audit_log (actor_id, action, subject, meta)
+      VALUES (${req.actor?.id ?? null}, ${entry.action}, ${entry.subject},
+              ${t.json({ ...(entry.meta ?? {}), ip: req.trustedIp, request_id: req.id } as never)})`;
+    if (tx) await write(tx);
+    else await withActor(sql, req.actor ?? null, write);
+  });
+
+  // Realtime fan-out. The websocket server subscribes to u:{accountId}; so does any other API
+  // replica, so an event raised on one pod reaches a socket held by another.
+  app.decorate('publish', async function publish(accountId: string, event: string, data: Record<string, unknown>) {
+    await redis.publish(`u:${accountId}`, JSON.stringify({ event, data, at: new Date().toISOString() }));
+  });
 });
