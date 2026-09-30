@@ -42,6 +42,9 @@ const Env = z.object({
   PORT: z.coerce.number().int().default(3000),
 
   DATABASE_URL: z.string().url(),
+  /** The ops console's connection, as sidequest_ops. Separate pool, separate role, separate
+   *  policies (0003 §ops); never the app role with extra entitlements. */
+  OPS_DATABASE_URL: z.string().url(),
   DATABASE_POOL_MAX: z.coerce.number().int().min(2).default(20),
   REDIS_URL: z.string().url(),
 
@@ -64,32 +67,40 @@ const Env = z.object({
   OPS_IP_ALLOWLIST: z.string().default('').transform((s) => s.split(',').map((x) => x.trim()).filter(Boolean)),
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(3).default(1),
 
-  R2_ACCOUNT_ID: z.string().min(1),
-  R2_ACCESS_KEY_ID: z.string().min(1),
-  R2_SECRET_ACCESS_KEY: secret(32),
-  R2_BUCKET: z.string().min(1),
+  /** HMAC key for the rotating handover QR token (04-api.md, GET /handover-token). */
+  HANDOVER_SECRET: secret(32),
+
+  // Drivers. Every external dependency has a development driver so the whole system runs on
+  // a laptop, and production refuses to boot on any of them (superRefine below).
+  STORAGE_DRIVER: z.enum(['local', 'r2']).default('local'),
+  STORAGE_LOCAL_DIR: z.string().default('./.data/uploads'),
+  R2_ACCOUNT_ID: z.string().min(1).optional(),
+  R2_ACCESS_KEY_ID: z.string().min(1).optional(),
+  R2_SECRET_ACCESS_KEY: secret(32).optional(),
+  R2_BUCKET: z.string().min(1).optional(),
   PRESIGN_TTL_SECONDS: z.coerce.number().int().max(300).default(300),
 
+  DARAJA_DRIVER: z.enum(['fake', 'daraja']).default('fake'),
   DARAJA_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
-  DARAJA_CONSUMER_KEY: z.string().min(1),
-  DARAJA_CONSUMER_SECRET: secret(16),
-  DARAJA_SHORTCODE: z.string().regex(/^\d{5,9}$/),
-  DARAJA_PASSKEY: secret(32),
-  DARAJA_B2C_INITIATOR: z.string().min(1),
-  DARAJA_B2C_CREDENTIAL: secret(32),
-  DARAJA_CALLBACK_BASE: z.string().url(),
+  DARAJA_CONSUMER_KEY: z.string().min(1).optional(),
+  DARAJA_CONSUMER_SECRET: secret(16).optional(),
+  DARAJA_SHORTCODE: z.string().regex(/^\d{5,9}$/).optional(),
+  DARAJA_PASSKEY: secret(32).optional(),
+  DARAJA_B2C_INITIATOR: z.string().min(1).optional(),
+  DARAJA_B2C_CREDENTIAL: secret(32).optional(),
+  DARAJA_CALLBACK_BASE: z.string().url().optional(),
   /** Safaricom source ranges. Callbacks from anywhere else are dropped before signature
    *  verification, so a forged confirmation never reaches the money path. */
-  DARAJA_SOURCE_CIDRS: z.string().transform((s) => s.split(',').map((x) => x.trim()).filter(Boolean))
-    .pipe(z.array(z.string()).min(1)),
+  DARAJA_SOURCE_CIDRS: z.string().default('').transform((s) => s.split(',').map((x) => x.trim()).filter(Boolean)),
 
   ISSUER_DRIVER: z.enum(['mock', 'union']).default('mock'),
   ISSUER_BASE_URL: z.string().url().optional(),
   ISSUER_API_KEY: secret(24).optional(),
   ISSUER_WEBHOOK_SECRET: secret(32).optional(),
 
-  AT_USERNAME: z.string().min(1),
-  AT_API_KEY: secret(24),
+  SMS_DRIVER: z.enum(['console', 'africastalking']).default('console'),
+  AT_USERNAME: z.string().min(1).optional(),
+  AT_API_KEY: secret(24).optional(),
   AT_SENDER_ID: z.string().default('SIDEQWEST'),
 
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
@@ -131,6 +142,27 @@ const Env = z.object({
     }
   }
 
+  const need = (cond: boolean, keys: (keyof typeof v)[], why: string) => {
+    if (!cond) return;
+    for (const k of keys) if (v[k] === undefined || (Array.isArray(v[k]) && (v[k] as unknown[]).length === 0)) {
+      ctx.addIssue({ code: 'custom', path: [k], message: `required when ${why}` });
+    }
+  };
+  need(v.STORAGE_DRIVER === 'r2', ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET'], 'STORAGE_DRIVER=r2');
+  need(v.DARAJA_DRIVER === 'daraja', ['DARAJA_CONSUMER_KEY', 'DARAJA_CONSUMER_SECRET', 'DARAJA_SHORTCODE',
+    'DARAJA_PASSKEY', 'DARAJA_B2C_INITIATOR', 'DARAJA_B2C_CREDENTIAL', 'DARAJA_CALLBACK_BASE', 'DARAJA_SOURCE_CIDRS'],
+    'DARAJA_DRIVER=daraja');
+  need(v.SMS_DRIVER === 'africastalking', ['AT_USERNAME', 'AT_API_KEY'], 'SMS_DRIVER=africastalking');
+
+  if (v.NODE_ENV === 'production') {
+    if (v.STORAGE_DRIVER === 'local') fail('Refusing to boot production with local file storage');
+    if (v.DARAJA_DRIVER === 'fake') fail('Refusing to boot production with the fake M-Pesa driver');
+    if (v.SMS_DRIVER === 'console') fail('Refusing to boot production with SMS printed to the console');
+    const opsUser = (() => { try { return new URL(v.OPS_DATABASE_URL).username; } catch { return ''; } })();
+    if (opsUser !== 'sidequest_ops') fail('OPS_DATABASE_URL must connect as sidequest_ops');
+    if (v.HANDOVER_SECRET === v.JWT_SECRET) fail('secrets must not be reused across purposes');
+  }
+
   if (v.ISSUER_DRIVER === 'union' && (!v.ISSUER_BASE_URL || !v.ISSUER_API_KEY)) {
     ctx.addIssue({ code: 'custom', message: 'ISSUER_BASE_URL and ISSUER_API_KEY are required when ISSUER_DRIVER=union' });
   }
@@ -147,7 +179,7 @@ const Env = z.object({
 
 /** Field names whose values never appear in a log line, error body, or boot banner. */
 const SECRET_KEYS = new Set([
-  'JWT_SECRET', 'COOKIE_SECRET', 'KYC_ENCRYPTION_KEY', 'R2_SECRET_ACCESS_KEY',
+  'JWT_SECRET', 'HANDOVER_SECRET', 'OPS_DATABASE_URL', 'COOKIE_SECRET', 'KYC_ENCRYPTION_KEY', 'R2_SECRET_ACCESS_KEY',
   'DARAJA_CONSUMER_SECRET', 'DARAJA_PASSKEY', 'DARAJA_B2C_CREDENTIAL',
   'ISSUER_API_KEY', 'ISSUER_WEBHOOK_SECRET', 'AT_API_KEY', 'DATABASE_URL', 'REDIS_URL',
 ]);
@@ -163,24 +195,33 @@ export type Config = z.infer<typeof Env>;
 
 let cached: Config | null = null;
 
-export function config(): Config {
-  if (cached) return cached;
-  const parsed = Env.safeParse(process.env);
+/** Parse and validate an environment. Pure: tests call it with a fabricated env. */
+export function loadConfig(env: Record<string, string | undefined>): Config {
+  const parsed = Env.safeParse(env);
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  ${i.path.join('.') || '(config)'}: ${i.message}`);
     throw new Error(`Invalid environment:\n${lines.join('\n')}`);
   }
-  cached = parsed.data;
+  const c = parsed.data;
 
   // Make an accidental `JSON.stringify(config())` or template-literal interpolation harmless.
   // Someone will do it in a debug line at 2am during an incident; this is cheaper than
   // catching it in review.
-  Object.defineProperty(cached, 'toJSON', { value: () => redactedConfig(cached!), enumerable: false });
-  Object.defineProperty(cached, Symbol.for('nodejs.util.inspect.custom'), {
-    value: () => redactedConfig(cached!), enumerable: false,
+  Object.defineProperty(c, 'toJSON', { value: () => redactedConfig(c), enumerable: false });
+  Object.defineProperty(c, Symbol.for('nodejs.util.inspect.custom'), {
+    value: () => redactedConfig(c), enumerable: false,
   });
+  return c;
+}
 
+export function config(): Config {
+  if (!cached) cached = loadConfig(process.env);
   return cached;
+}
+
+/** Tests only: drop the cached config so the next call re-reads the environment. */
+export function resetConfigForTests(): void {
+  cached = null;
 }
 
 export const isProd = () => config().NODE_ENV === 'production';

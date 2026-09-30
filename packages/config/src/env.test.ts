@@ -1,0 +1,75 @@
+// Production must refuse to boot on anything that would silently weaken it. Each refusal is
+// a line in env.ts a refactor could delete; each test here is what notices.
+
+import { describe, test, expect } from 'vitest';
+import { randomBytes } from 'node:crypto';
+import { loadConfig } from './env.js';
+
+const s = (n = 48) => randomBytes(n).toString('base64url');
+
+function prodEnv(): Record<string, string> {
+  return {
+    NODE_ENV: 'production',
+    DATABASE_URL: 'postgres://sidequest_app:x@db.internal:5432/sq?sslmode=verify-full',
+    OPS_DATABASE_URL: 'postgres://sidequest_ops:x@db.internal:5432/sq?sslmode=verify-full',
+    REDIS_URL: 'rediss://cache.internal:6379',
+    JWT_SECRET: s(), COOKIE_SECRET: s(), KYC_ENCRYPTION_KEY: s(), KYC_ENCRYPTION_KEY_ID: 'kms-2026-09',
+    HANDOVER_SECRET: s(),
+    ALLOWED_ORIGINS: 'https://console.sidequest.co.ke',
+    API_PUBLIC_ORIGIN: 'https://api.sidequest.co.ke',
+    COOKIE_DOMAIN: 'sidequest.co.ke',
+    OPS_IP_ALLOWLIST: '10.0.0.0/16',
+    STORAGE_DRIVER: 'r2', R2_ACCOUNT_ID: 'acct', R2_ACCESS_KEY_ID: 'akid', R2_SECRET_ACCESS_KEY: s(), R2_BUCKET: 'evidence',
+    DARAJA_DRIVER: 'daraja', DARAJA_ENV: 'production', DARAJA_CONSUMER_KEY: 'ck', DARAJA_CONSUMER_SECRET: s(),
+    DARAJA_SHORTCODE: '174379', DARAJA_PASSKEY: s(), DARAJA_B2C_INITIATOR: 'sq-initiator',
+    DARAJA_B2C_CREDENTIAL: s(), DARAJA_CALLBACK_BASE: 'https://api.sidequest.co.ke',
+    DARAJA_SOURCE_CIDRS: '196.201.214.0/24',
+    ISSUER_DRIVER: 'union', ISSUER_BASE_URL: 'https://issuer.example-bank.co.ke', ISSUER_API_KEY: s(32),
+    ISSUER_WEBHOOK_SECRET: s(),
+    SMS_DRIVER: 'africastalking', AT_USERNAME: 'sidequest', AT_API_KEY: s(32),
+  };
+}
+
+describe('config refusals', () => {
+  test('a complete production environment boots', () => {
+    expect(() => loadConfig(prodEnv())).not.toThrow();
+  });
+
+  test.each([
+    ['placeholder JWT_SECRET', { JWT_SECRET: 'changeme_changeme_changeme_changeme_changeme_ab' }],
+    ['low-entropy JWT_SECRET', { JWT_SECRET: 'ab'.repeat(30) }],
+    ['owner DATABASE_URL', { DATABASE_URL: 'postgres://sidequest_migrator@db/sq?sslmode=verify-full' }],
+    ['no TLS to the database', { DATABASE_URL: 'postgres://sidequest_app:x@db/sq' }],
+    ['plaintext Redis', { REDIS_URL: 'redis://cache:6379' }],
+    ['plaintext origin', { ALLOWED_ORIGINS: 'http://console.sidequest.co.ke' }],
+    ['empty ops allowlist', { OPS_IP_ALLOWLIST: '' }],
+    ['sandbox rails', { DARAJA_ENV: 'sandbox' }],
+    ['mock issuer', { ISSUER_DRIVER: 'mock' }],
+    ['fake M-Pesa driver', { DARAJA_DRIVER: 'fake' }],
+    ['local storage', { STORAGE_DRIVER: 'local' }],
+    ['console SMS', { SMS_DRIVER: 'console' }],
+    ['ops pool as the app role', { OPS_DATABASE_URL: 'postgres://sidequest_app:x@db/sq?sslmode=verify-full' }],
+  ])('production refuses to boot with %s', (_label, override) => {
+    expect(() => loadConfig({ ...prodEnv(), ...override })).toThrow();
+  });
+
+  test('a reused secret is refused', () => {
+    const env = prodEnv();
+    expect(() => loadConfig({ ...env, COOKIE_SECRET: env.JWT_SECRET! })).toThrow(/reused/);
+  });
+
+  test('a live rail with missing credentials is refused in any environment', () => {
+    const env = { ...prodEnv(), NODE_ENV: 'development' };
+    delete (env as Record<string, string | undefined>).DARAJA_PASSKEY;
+    expect(() => loadConfig(env)).toThrow(/DARAJA_PASSKEY/);
+  });
+
+  test('config never prints a secret', () => {
+    const env = prodEnv();
+    const printed = JSON.stringify(loadConfig(env));
+    expect(printed).toMatch(/\[redacted\]/);
+    for (const k of ['JWT_SECRET', 'DARAJA_PASSKEY', 'HANDOVER_SECRET', 'DATABASE_URL'] as const) {
+      expect(printed).not.toContain(env[k]);
+    }
+  });
+});
