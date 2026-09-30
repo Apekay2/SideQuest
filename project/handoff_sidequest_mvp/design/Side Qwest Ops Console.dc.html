@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="_ds/organic-4f4473c1-637a-4031-9a06-57d81f0f6a6a/styles.css">
+<script src="_ds/organic-4f4473c1-637a-4031-9a06-57d81f0f6a6a/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:#ece0ca;color:#201e1d;font-family:"Figtree",system-ui,sans-serif}
+a{color:#8c491a}a:hover{color:#643312}
+*{box-sizing:border-box}
+</style>
+</helmet>
+<div style="width:1440px;min-height:900px;display:flex;background:#f5ead8">
+  <div style="width:232px;flex:none;background:#ebddc5;padding:26px 18px;display:flex;flex-direction:column;gap:26px">
+    <div style="font-family:'Caprasimo',serif;font-size:21px">Side Qwest Ops</div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button onClick="{{ goKyc }}" style="text-align:left;min-height:44px;border:0;background:{{ kycBg }};color:{{ kycFg }};font-size:13.5px;padding:11px 15px;border-radius:999px;cursor:pointer" style-hover="background:#e2d2b5">KYC queue <span style="opacity:.7">· 12</span></button>
+      <button onClick="{{ goCases }}" style="text-align:left;min-height:44px;border:0;background:{{ casesBg }};color:{{ casesFg }};font-size:13.5px;padding:11px 15px;border-radius:999px;cursor:pointer" style-hover="background:#e2d2b5">Disputes <span style="opacity:.7">· 4</span></button>
+      <button onClick="{{ goRulings }}" style="text-align:left;min-height:44px;border:0;background:{{ rulingsBg }};color:{{ rulingsFg }};font-size:13.5px;padding:11px 15px;border-radius:999px;cursor:pointer" style-hover="background:#e2d2b5">Rulings log</button>
+    </div>
+    <div style="margin-top:auto;font-size:11.5px;color:#645c50;line-height:1.5">Restricted console. Access limited to the system administrator; every view is access-logged.</div>
+  </div>
+
+  <div style="flex:1;min-width:0;padding:30px 34px 40px">
+
+    <sc-if value="{{ isKyc }}" hint-placeholder-val="{{ true }}">
+      <div>
+        <h1 style="font-family:'Caprasimo',serif;font-size:31px;margin:0 0 6px">KYC queue</h1>
+        <p style="margin:0 0 22px;font-size:13.5px;color:#645c50;max-width:620px">Cases the vendor could not clear automatically. Documents open in a viewer that never leaves this console — nothing is downloadable.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:13.5px;background:#f9f4ed;border-radius:26px;overflow:hidden">
+          <thead><tr>
+            <th style="text-align:left;padding:12px 16px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#645c50;border-bottom:1px solid #dcd3c4">Case</th>
+            <th style="text-align:left;padding:12px 16px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#645c50;border-bottom:1px solid #dcd3c4">Tier</th>
+            <th style="text-align:left;padding:12px 16px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#645c50;border-bottom:1px solid #dcd3c4">Flag</th>
+            <th style="text-align:left;padding:12px 16px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#645c50;border-bottom:1px solid #dcd3c4">Waiting</th>
+            <th style="text-align:right;padding:12px 16px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#645c50;border-bottom:1px solid #dcd3c4">Decision</th>
+          </tr></thead>
+          <tbody>
+            <sc-for list="{{ kycCases }}" as="k" hint-placeholder-count="4">
+              <tr>
+                <td style="padding:13px 16px;border-bottom:1px solid #ece0ca">{{ k.ref }}</td>
+                <td style="padding:13px 16px;border-bottom:1px solid #ece0ca">{{ k.tier }}</td>
+                <td style="padding:13px 16px;border-bottom:1px solid #ece0ca"><span style="background:{{ k.flagBg }};color:{{ k.flagFg }};font-size:11.5px;padding:5px 11px;border-radius:999px">{{ k.flag }}</span></td>
+                <td style="padding:13px 16px;border-bottom:1px solid #ece0ca;color:#645c50">{{ k.waiting }}</td>
+                <td style="padding:13px 16px;border-bottom:1px solid #ece0ca;text-align:right">
+                  <span style="display:inline-flex;gap:7px">
+                    <button onClick="{{ k.pass }}" style="min-height:38px;border:0;background:#7a8a5e;color:#f0fae1;font-size:12.5px;padding:9px 16px;border-radius:999px;cursor:pointer" style-hover="background:#728157">{{ k.passLabel }}</button>
+                    <button onClick="{{ k.hold }}" style="min-height:38px;border:1px solid #c0b6a5;background:transparent;color:#645c50;font-size:12.5px;padding:9px 16px;border-radius:999px;cursor:pointer" style-hover="background:#ebddc5">Ask again</button>
+                  </span>
+                </td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isCases }}">
+      <div style="display:flex;gap:24px;align-items:flex-start">
+        <div style="width:330px;flex:none">
+          <h1 style="font-family:'Caprasimo',serif;font-size:31px;margin:0 0 6px">Disputes</h1>
+          <p style="margin:0 0 18px;font-size:13.5px;color:#645c50">Escrow frozen, card voided. Oldest first.</p>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <sc-for list="{{ cases }}" as="c" hint-placeholder-count="3">
+              <button onClick="{{ c.open }}" style="text-align:left;min-height:44px;border:1px solid {{ c.border }};background:{{ c.bg }};border-radius:22px;padding:14px;cursor:pointer" style-hover="border-color:#c67139">
+                <div style="display:flex;justify-content:space-between;align-items:baseline"><span style="font-size:13.5px;font-weight:600">{{ c.ref }}</span><span style="font-size:12px;color:#645c50">KSh {{ c.amount }}</span></div>
+                <div style="font-size:12px;color:#645c50;margin-top:4px">{{ c.reason }}</div>
+                <div style="font-size:11.5px;color:#82796a;margin-top:5px">{{ c.age }} · {{ c.mode }}</div>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="flex:1;min-width:0;background:#f9f4ed;border:1px solid #dcd3c4;border-radius:30px;padding:24px">
+          <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap">
+            <div style="font-family:'Caprasimo',serif;font-size:23px">{{ sel.ref }}</div>
+            <span style="background:#fff2eb;color:#8c491a;font-size:11.5px;padding:5px 12px;border-radius:999px">Escrow frozen · KSh {{ sel.amount }}</span>
+            <span style="font-size:12.5px;color:#645c50;margin-left:auto">{{ sel.mode }}</span>
+          </div>
+          <p style="margin:12px 0 20px;font-size:14px;color:#3b3730;max-width:640px">{{ sel.summary }}</p>
+
+          <div style="font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#645c50;margin-bottom:10px">Evidence pack</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+            <sc-for list="{{ sel.evidence }}" as="e" hint-placeholder-count="6">
+              <div style="background:#ebddc5;border-radius:20px;padding:13px">
+                <div style="font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#82796a">{{ e.kind }}</div>
+                <div style="font-size:13px;margin-top:5px">{{ e.value }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#645c50;margin:22px 0 10px">Ruling</div>
+          <div style="display:flex;gap:9px;flex-wrap:wrap">
+            <button onClick="{{ ruleRelease }}" style="min-height:44px;border:0;background:#7a8a5e;color:#f0fae1;font-family:'Caprasimo',serif;font-size:13.5px;padding:12px 20px;border-radius:999px;cursor:pointer" style-hover="background:#728157">Release to runner</button>
+            <button onClick="{{ ruleSplit }}" style="min-height:44px;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:13.5px;padding:12px 20px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d">Split 50/50</button>
+            <button onClick="{{ ruleRefund }}" style="min-height:44px;border:1px solid #c0b6a5;background:transparent;color:#201e1d;font-size:13px;padding:12px 20px;border-radius:999px;cursor:pointer" style-hover="background:#ebddc5">Refund requester</button>
+            <button onClick="{{ ruleVoid }}" style="min-height:44px;border:1px solid #c0b6a5;background:transparent;color:#645c50;font-size:13px;padding:12px 20px;border-radius:999px;cursor:pointer" style-hover="background:#ebddc5">Void, no fault</button>
+          </div>
+          <sc-if value="{{ ruled }}">
+            <div style="margin-top:16px;background:#f0fae1;border-radius:22px;padding:15px 18px;font-size:13.5px;color:#56633f">{{ rulingNote }}</div>
+          </sc-if>
+          <p style="margin:16px 0 0;font-size:12px;color:#82796a;max-width:640px">Rulings are append-only, cite the evidence above, and bind both parties. Either side may request one review, which routes to a different reviewer.</p>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isRulings }}">
+      <div>
+        <h1 style="font-family:'Caprasimo',serif;font-size:31px;margin:0 0 6px">Rulings log</h1>
+        <p style="margin:0 0 22px;font-size:13.5px;color:#645c50;max-width:620px">Append-only. Entries cannot be edited or removed; a correction is a new entry citing the first.</p>
+        <table style="width:100%;border-collapse:collapse;font-size:13.5px;background:#f9f4ed;border-radius:26px;overflow:hidden">
+          <thead><tr>
+            <th style="text-align:left;padding:12px 16px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#645c50;border-bottom:1px solid #dcd3c4">When</th>
+            <th style="text-align:left;padding:12px 16px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#645c50;border-bottom:1px solid #dcd3c4">Case</th>
+            <th style="text-align:left;padding:12px 16px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#645c50;border-bottom:1px solid #dcd3c4">Ruling</th>
+            <th style="text-align:left;padding:12px 16px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#645c50;border-bottom:1px solid #dcd3c4">Rested on</th>
+            <th style="text-align:left;padding:12px 16px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:#645c50;border-bottom:1px solid #dcd3c4">Reviewer</th>
+          </tr></thead>
+          <tbody>
+            <sc-for list="{{ rulings }}" as="r" hint-placeholder-count="5">
+              <tr>
+                <td style="padding:13px 16px;border-bottom:1px solid #ece0ca;color:#645c50">{{ r.when }}</td>
+                <td style="padding:13px 16px;border-bottom:1px solid #ece0ca">{{ r.ref }}</td>
+                <td style="padding:13px 16px;border-bottom:1px solid #ece0ca"><span style="background:{{ r.bg }};color:{{ r.fg }};font-size:11.5px;padding:5px 11px;border-radius:999px">{{ r.ruling }}</span></td>
+                <td style="padding:13px 16px;border-bottom:1px solid #ece0ca;color:#645c50">{{ r.basis }}</td>
+                <td style="padding:13px 16px;border-bottom:1px solid #ece0ca;color:#645c50">{{ r.by }}</td>
+              </tr>
+            </sc-for>
+          </tbody>
+        </table>
+      </div>
+    </sc-if>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900}}">
+class Component extends DCLogic {
+  state = { tab: 'cases', sel: 'DSP-2291', ruling: null, decided: {} };
+
+  renderVals() {
+    const s = this.state;
+    const tabBg = t => (s.tab === t ? '#c67139' : 'transparent');
+    const tabFg = t => (s.tab === t ? '#f5ead8' : '#201e1d');
+
+    const cases = [
+      { ref: 'DSP-2291', amount: '1,190', reason: 'Basket price above market band', age: '4 h', mode: 'item_photo',
+        summary: 'Requester says the tomato line was priced KSh 60 above the Toi band and the photo shows a smaller lot than billed. Runner says the trader had no smaller lot and the price was the morning rate.',
+        evidence: [
+          { kind: 'Item photo', value: 'Tomatoes 1 kg · vision score 0.71' },
+          { kind: 'Price band', value: 'Toi, 7-day median KSh 90–110' },
+          { kind: 'Card load', value: 'KSh 240 · leg v1 · approved by requester' },
+          { kind: 'Handover', value: 'QR scanned 12:41, 40 m from drop' },
+          { kind: 'Messages', value: '3 messages, no price discussion' },
+          { kind: 'Tiers', value: 'Both tier 2 · runner tier 3' },
+        ] },
+      { ref: 'DSP-2288', amount: '2,340', reason: 'Receipt total exceeds card charge', age: '9 h', mode: 'receipt',
+        summary: 'OCR read KSh 2,340; the issuer authorisation cleared at KSh 2,540. Runner states the till reprinted after a price correction.',
+        evidence: [
+          { kind: 'Receipt OCR', value: 'KSh 2,340 · confidence 0.93' },
+          { kind: 'Card auth', value: 'KSh 2,540 · Naivas Kileleshwa' },
+          { kind: 'Timing', value: 'Auth 11:02, receipt photo 11:09' },
+          { kind: 'Merchant', value: 'Named merchant, terminal ID matched' },
+          { kind: 'History', value: 'Runner: 68 Qwests, no prior report' },
+          { kind: 'Tiers', value: 'Requester tier 1 · runner tier 3' },
+        ] },
+      { ref: 'DSP-2280', amount: '350', reason: 'Handover disputed — no scan', age: '1 d', mode: 'requester_confirm',
+        summary: 'Runner marked the documents delivered; the requester says nobody at the Westlands office received them. No QR scan is recorded.',
+        evidence: [
+          { kind: 'Handover', value: 'No scan recorded' },
+          { kind: 'Location', value: 'Runner within 15 m of drop, 8 min dwell' },
+          { kind: 'Photos', value: 'Envelope photo at reception desk' },
+          { kind: 'Messages', value: 'Runner messaged twice, no reply' },
+          { kind: 'Auto-settle', value: 'Blocked — settle requires a scan' },
+          { kind: 'Tiers', value: 'Both tier 2' },
+        ] },
+    ].map(c => ({
+      ...c,
+      open: () => this.setState({ sel: c.ref, ruling: null }),
+      bg: s.sel === c.ref ? '#fff2eb' : '#f9f4ed',
+      border: s.sel === c.ref ? '#c67139' : '#dcd3c4',
+    }));
+
+    const sel = cases.find(c => c.ref === s.sel) || cases[0];
+    const note = {
+      release: 'Released in full to the runner. Escrow cleared, requester notified with the reasoning.',
+      split: 'Split 5,000 bps each way. Two postings, both citing this ruling.',
+      refund: 'Refunded to the requester. Runner fee withheld; a penalty is recorded against their matching score.',
+      void: 'Voided with no fault found. Escrow returned, no mark on either party.',
+    };
+
+    const kycCases = [
+      { ref: 'KYC-8841', tier: 'tier 2', flag: 'Payout name mismatch', waiting: '2 h', pass: 'Clear tier 2' },
+      { ref: 'KYC-8839', tier: 'tier 3', flag: 'Good conduct expired', waiting: '5 h', pass: 'Clear tier 3' },
+      { ref: 'KYC-8836', tier: 'tier 1', flag: 'Liveness score low', waiting: '6 h', pass: 'Clear tier 1' },
+      { ref: 'KYC-8830', tier: 'tier 2', flag: 'Address doc unreadable', waiting: '1 d', pass: 'Clear tier 2' },
+    ].map(k => ({
+      ...k,
+      passLabel: s.decided[k.ref] === 'pass' ? 'Cleared' : k.pass,
+      flagBg: s.decided[k.ref] === 'hold' ? '#ffe1d0' : '#fff2eb',
+      flagFg: '#8c491a',
+      pass: () => this.setState(p => ({ decided: { ...p.decided, [k.ref]: 'pass' } })),
+      hold: () => this.setState(p => ({ decided: { ...p.decided, [k.ref]: 'hold' } })),
+    }));
+
+    const rulings = [
+      { when: '22 Aug 09:14', ref: 'DSP-2274', ruling: 'Split', basis: 'Item photo, price band', by: 'L. Mutiso' },
+      { when: '21 Aug 17:02', ref: 'DSP-2269', ruling: 'Release', basis: 'Receipt OCR, card auth', by: 'A. Kariuki' },
+      { when: '21 Aug 11:48', ref: 'DSP-2264', ruling: 'Refund', basis: 'No handover scan', by: 'L. Mutiso' },
+      { when: '20 Aug 15:30', ref: 'DSP-2258', ruling: 'Void', basis: 'Card decline, no purchase', by: 'S. Omondi' },
+      { when: '20 Aug 08:11', ref: 'DSP-2251', ruling: 'Release', basis: 'Photos, QR scan', by: 'A. Kariuki' },
+    ].map(r => ({
+      ...r,
+      bg: r.ruling === 'Release' ? '#f0fae1' : r.ruling === 'Refund' ? '#ffe1d0' : r.ruling === 'Split' ? '#fff2eb' : '#ebddc5',
+      fg: r.ruling === 'Release' ? '#56633f' : r.ruling === 'Void' ? '#645c50' : '#8c491a',
+    }));
+
+    return {
+      isKyc: s.tab === 'kyc', isCases: s.tab === 'cases', isRulings: s.tab === 'rulings',
+      goKyc: () => this.setState({ tab: 'kyc' }), goCases: () => this.setState({ tab: 'cases' }), goRulings: () => this.setState({ tab: 'rulings' }),
+      kycBg: tabBg('kyc'), kycFg: tabFg('kyc'), casesBg: tabBg('cases'), casesFg: tabFg('cases'), rulingsBg: tabBg('rulings'), rulingsFg: tabFg('rulings'),
+      cases, sel, kycCases, rulings,
+      ruled: !!s.ruling, rulingNote: note[s.ruling] || '',
+      ruleRelease: () => this.setState({ ruling: 'release' }), ruleSplit: () => this.setState({ ruling: 'split' }),
+      ruleRefund: () => this.setState({ ruling: 'refund' }), ruleVoid: () => this.setState({ ruling: 'void' }),
+    };
+  }
+}
+</script>
+</body>
+</html>

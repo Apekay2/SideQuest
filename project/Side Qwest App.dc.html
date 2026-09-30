@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="_ds/organic-4f4473c1-637a-4031-9a06-57d81f0f6a6a/styles.css">
+<script src="_ds/organic-4f4473c1-637a-4031-9a06-57d81f0f6a6a/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:#ece0ca;color:#201e1d;font-family:"Figtree",system-ui,sans-serif}
+a{color:#8c491a;text-underline-offset:3px}a:hover{color:#643312}
+*{box-sizing:border-box}
+@keyframes sqIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes sqPulse{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:.12;transform:scale(1.6)}}
+.sq-strip{background:repeating-linear-gradient(135deg,#dcd3c4 0 8px,#e7dcc8 8px 16px)}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;gap:22px;padding:36px 24px 60px">
+  <div style="width:100%;max-width:920px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap">
+      <h1 style="font-family:'Caprasimo',serif;font-size:40px;line-height:1;margin:0;letter-spacing:-.015em">Side Qwest</h1>
+      <p style="margin:0 0 4px;font-size:14px;color:#645c50;max-width:420px">Errands run by neighbours, for an agreed fee. Nairobi pilot — KSh, M-Pesa, gated ID verification.</p>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      <button onClick="{{ goKyc }}" style="border:1px solid #dcd3c4;background:#f9f4ed;color:#201e1d;font-size:12.5px;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap" style-hover="background:#fff2eb;border-color:#c67139">KYC onboarding</button>
+      <button onClick="{{ goHome }}" style="border:1px solid #dcd3c4;background:#f9f4ed;color:#201e1d;font-size:12.5px;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap" style-hover="background:#fff2eb;border-color:#c67139">Requester home</button>
+      <button onClick="{{ goPost }}" style="border:1px solid #dcd3c4;background:#f9f4ed;color:#201e1d;font-size:12.5px;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap" style-hover="background:#fff2eb;border-color:#c67139">Post a Qwest</button>
+      <button onClick="{{ goBids }}" style="border:1px solid #dcd3c4;background:#f9f4ed;color:#201e1d;font-size:12.5px;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap" style-hover="background:#fff2eb;border-color:#c67139">Offers</button>
+      <button onClick="{{ goTrack }}" style="border:1px solid #dcd3c4;background:#f9f4ed;color:#201e1d;font-size:12.5px;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap" style-hover="background:#fff2eb;border-color:#c67139">Live Qwest</button>
+      <button onClick="{{ goCard }}" style="border:1px solid #dcd3c4;background:#f9f4ed;color:#201e1d;font-size:12.5px;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap" style-hover="background:#fff2eb;border-color:#c67139">Qwest card</button>
+      <button onClick="{{ goChat }}" style="border:1px solid #dcd3c4;background:#f9f4ed;color:#201e1d;font-size:12.5px;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap" style-hover="background:#fff2eb;border-color:#c67139">Messages</button>
+      <button onClick="{{ goRkyc }}" style="border:1px solid #7a8a5e;background:#f0fae1;color:#56633f;font-size:12.5px;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap" style-hover="background:#e1eecc">Runner checks</button>
+      <button onClick="{{ goWallet }}" style="border:1px solid #dcd3c4;background:#f9f4ed;color:#201e1d;font-size:12.5px;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap" style-hover="background:#fff2eb;border-color:#c67139">Wallet</button>
+      <button onClick="{{ goSafety }}" style="border:1px solid #dcd3c4;background:#f9f4ed;color:#201e1d;font-size:12.5px;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap" style-hover="background:#fff2eb;border-color:#c67139">Safety report</button>
+      <button onClick="{{ goRunner }}" style="border:1px solid #7a8a5e;background:#f0fae1;color:#56633f;font-size:12.5px;padding:7px 14px;border-radius:999px;cursor:pointer;white-space:nowrap" style-hover="background:#e1eecc">Runner side</button>
+    </div>
+  </div>
+
+  <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+    <div style="min-height:100%;display:flex;flex-direction:column;background:#f5ead8;padding-top:56px">
+
+      <!-- ══ requester home ══ -->
+      <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;display:flex;flex-direction:column;animation:sqIn .28s ease">
+          <div style="padding:8px 20px 0;display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:12.5px;color:#82796a">{{ tHello }}</div>
+              <div style="font-family:'Caprasimo',serif;font-size:26px;line-height:1.1">Amina</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <button onClick="{{ toggleLang }}" style="min-width:44px;min-height:44px;border:1px solid #dcd3c4;background:#f9f4ed;border-radius:999px;font-size:12px;color:#645c50;cursor:pointer" style-hover="border-color:#c67139">{{ langLabel }}</button>
+              <button onClick="{{ toggleRole }}" style="min-height:44px;display:flex;align-items:center;gap:7px;border:1px solid #dcd3c4;background:#f9f4ed;border-radius:999px;padding:5px 6px 5px 12px;cursor:pointer;font-size:12px;color:#201e1d" style-hover="border-color:#c67139">Requester<span style="background:#c67139;color:#f5ead8;border-radius:999px;padding:5px 10px;font-size:11px">Switch</span></button>
+            </div>
+          </div>
+
+          <sc-if value="{{ unverified }}">
+            <div style="margin:16px 20px 0;background:#fff2eb;border:1px solid #ffc6a5;border-radius:26px;padding:16px">
+              <div style="display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#8c491a">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="2.75" stroke-linecap="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"></path></svg>
+                Browse only
+              </div>
+              <div style="font-family:'Caprasimo',serif;font-size:19px;margin:8px 0 4px">Verify to post or run a Qwest</div>
+              <p style="margin:0 0 12px;font-size:13px;color:#645c50">Everyone on Side Qwest passes ID, address and M-Pesa checks. It takes about four minutes.</p>
+              <button onClick="{{ goKyc }}" style="width:100%;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:14px;padding:12px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d" style-active="background:#8c491a">Start verification</button>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ verified }}">
+            <div style="margin:16px 20px 0;display:flex;align-items:center;gap:10px;background:#f0fae1;border:1px solid #ccdbb2;border-radius:999px;padding:10px 16px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#56633f" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+              <span style="font-size:13px;color:#56633f">Fully verified · escrow limit KSh 20,000</span>
+            </div>
+          </sc-if>
+
+          <div style="margin:18px 20px 0">
+            <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a;margin-bottom:10px">{{ tStart }}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <button onClick="{{ goPost }}" style="text-align:left;border:0;background:#ebddc5;border-radius:24px;padding:16px;cursor:pointer" style-hover="background:#e2d2b5">
+                <div style="width:34px;height:34px;border-radius:999px;background:#c67139;margin-bottom:10px"></div>
+                <div style="font-family:'Caprasimo',serif;font-size:15px">Market run</div>
+                <div style="font-size:11.5px;color:#82796a;margin-top:2px">Groceries, Toi or Sarit</div>
+              </button>
+              <button onClick="{{ goPost }}" style="text-align:left;border:0;background:#ebddc5;border-radius:24px;padding:16px;cursor:pointer" style-hover="background:#e2d2b5">
+                <div style="width:34px;height:34px;border-radius:999px;background:#7a8a5e;margin-bottom:10px"></div>
+                <div style="font-family:'Caprasimo',serif;font-size:15px">Queue standing</div>
+                <div style="font-size:11.5px;color:#82796a;margin-top:2px">Bank, NTSA, embassy</div>
+              </button>
+              <button onClick="{{ goPost }}" style="text-align:left;border:0;background:#ebddc5;border-radius:24px;padding:16px;cursor:pointer;grid-column:span 2;display:flex;align-items:center;gap:14px" style-hover="background:#e2d2b5">
+                <div style="width:34px;height:34px;border-radius:999px;background:#82796a;flex:none"></div>
+                <div><div style="font-family:'Caprasimo',serif;font-size:15px">Document drop-off</div><div style="font-size:11.5px;color:#82796a;margin-top:2px">Signed papers, hand to hand with a PIN</div></div>
+              </button>
+            </div>
+          </div>
+
+          <div style="margin:20px 20px 0">
+            <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a;margin-bottom:10px">In progress</div>
+            <button onClick="{{ goTrack }}" style="width:100%;text-align:left;border:1px solid #dcd3c4;background:#f9f4ed;border-radius:26px;padding:16px;cursor:pointer;display:flex;gap:12px;align-items:center" style-hover="border-color:#c67139">
+              <div style="position:relative;width:40px;height:40px;flex:none">
+                <div style="position:absolute;inset:0;border-radius:999px;background:#c67139;animation:sqPulse 2.2s ease-in-out infinite"></div>
+                <div style="position:absolute;inset:12px;border-radius:999px;background:#c67139"></div>
+              </div>
+              <div style="flex:1">
+                <div style="font-family:'Caprasimo',serif;font-size:15px">Grace is at Toi Market</div>
+                <div style="font-size:12px;color:#82796a">Market run · card live · {{ legsLabel }}</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#82796a" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+            </button>
+          </div>
+
+          <div style="flex:1"></div>
+          <div style="position:sticky;bottom:0;display:flex;gap:6px;padding:10px 16px 30px;background:linear-gradient(#f5ead800,#f5ead8 32%)">
+            <button onClick="{{ goHome }}" style="flex:1;border:0;background:#ebddc5;color:#201e1d;border-radius:999px;padding:11px;font-size:12.5px;cursor:pointer" style-hover="background:#e2d2b5">Home</button>
+            <button onClick="{{ goWallet }}" style="flex:1;border:0;background:transparent;color:#645c50;border-radius:999px;padding:11px;font-size:12.5px;cursor:pointer" style-hover="background:#ebddc5">Wallet</button>
+            <button onClick="{{ goSafety }}" style="flex:1;border:0;background:transparent;color:#645c50;border-radius:999px;padding:11px;font-size:12.5px;cursor:pointer" style-hover="background:#ebddc5">Safety</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ══ KYC ══ -->
+      <sc-if value="{{ inKyc }}">
+        <div style="flex:1;display:flex;flex-direction:column;animation:sqIn .28s ease">
+          <div style="padding:8px 20px 0;display:flex;align-items:center;gap:12px">
+            <button onClick="{{ kycBack }}" style="width:44px;height:44px;border-radius:999px;border:1px solid #dcd3c4;background:#f9f4ed;display:grid;place-items:center;cursor:pointer" style-hover="border-color:#c67139">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#201e1d" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+            </button>
+            <div style="font-size:12px;color:#82796a">Verification</div>
+          </div>
+
+          <sc-if value="{{ kycStepper }}">
+            <div style="display:flex;align-items:center;gap:6px;padding:18px 20px 0">
+              <div style="flex:1;height:6px;border-radius:999px;background:#c67139"></div>
+              <div style="flex:1;height:6px;border-radius:999px;background:{{ bar2 }}"></div>
+              <div style="flex:1;height:6px;border-radius:999px;background:{{ bar3 }}"></div>
+              <span style="font-size:11px;color:#82796a;margin-left:6px">{{ stepLabel }}</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{ kycRings }}">
+            <div style="display:flex;align-items:center;gap:14px;padding:18px 20px 0">
+              <div style="width:52px;height:52px;border-radius:999px;background:{{ ringBg }};display:grid;place-items:center;flex:none">
+                <div style="width:40px;height:40px;border-radius:999px;background:#f5ead8;display:grid;place-items:center;font-family:'Caprasimo',serif;font-size:14px">{{ stepNum }}</div>
+              </div>
+              <div style="font-size:12.5px;color:#645c50">{{ stepLabel }} · {{ stepName }}</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isKyc1 }}">
+            <div style="padding:20px">
+              <h2 style="font-family:'Caprasimo',serif;font-size:27px;margin:0 0 6px;line-height:1.1">Who you are</h2>
+              <p style="margin:0 0 18px;font-size:13px;color:#645c50">Straight from your Kenyan National ID. Names must match exactly.</p>
+              <div style="display:flex;flex-direction:column;gap:14px">
+                <div><label style="display:block;font-size:12px;color:#645c50;margin-bottom:5px">Full legal name</label><input class="sq-in" value="Amina Wanjiru Otieno" style="width:100%;min-height:42px;padding:8px 16px;font:inherit;font-size:14px;background:#ebddc5;border:1px solid #dcd3c4;border-radius:999px;color:#201e1d" style-focus="border-color:#c67139;outline:none"></div>
+                <div style="display:flex;gap:10px">
+                  <div style="flex:1"><label style="display:block;font-size:12px;color:#645c50;margin-bottom:5px">Date of birth</label><input value="14 / 03 / 1996" style="width:100%;min-height:42px;padding:8px 16px;font:inherit;font-size:14px;background:#ebddc5;border:1px solid #dcd3c4;border-radius:999px;color:#201e1d" style-focus="border-color:#c67139;outline:none"></div>
+                  <div style="flex:1"><label style="display:block;font-size:12px;color:#645c50;margin-bottom:5px">National ID no.</label><input value="32 148 907" style="width:100%;min-height:42px;padding:8px 16px;font:inherit;font-size:14px;background:#ebddc5;border:1px solid #dcd3c4;border-radius:999px;color:#201e1d" style-focus="border-color:#c67139;outline:none"></div>
+                </div>
+                <div><label style="display:block;font-size:12px;color:#645c50;margin-bottom:5px">M-Pesa number</label><input value="+254 712 004 918" style="width:100%;min-height:42px;padding:8px 16px;font:inherit;font-size:14px;background:#ebddc5;border:1px solid #dcd3c4;border-radius:999px;color:#201e1d" style-focus="border-color:#c67139;outline:none"></div>
+              </div>
+              <div style="margin-top:18px;display:flex;gap:10px;background:#f0fae1;border-radius:24px;padding:14px 16px">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#56633f" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:1px"><rect x="4" y="10" width="16" height="10" rx="3"></rect><path d="M8 10V7a4 4 0 018 0v3"></path></svg>
+                <div style="font-size:12.5px;color:#56633f">Held encrypted with our licensed verification partner. Other users only ever see your first name, photo and rating.</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isKyc2 }}">
+            <div style="padding:20px">
+              <h2 style="font-family:'Caprasimo',serif;font-size:27px;margin:0 0 6px;line-height:1.1">Prove it's you</h2>
+              <p style="margin:0 0 18px;font-size:13px;color:#645c50">Two photos of the ID, then a short liveness check.</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div class="sq-strip" style="border-radius:22px;aspect-ratio:1.55;display:grid;place-items:center;border:1px solid #dcd3c4">
+                  <div style="text-align:center"><div style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#645c50">ID front</div><div style="font-size:11px;color:#56633f;margin-top:4px">Captured ✓</div></div>
+                </div>
+                <div class="sq-strip" style="border-radius:22px;aspect-ratio:1.55;display:grid;place-items:center;border:1px dashed #c0b6a5">
+                  <div style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#645c50">ID back — tap</div>
+                </div>
+              </div>
+              <div style="margin-top:12px;display:flex;align-items:center;gap:14px;background:#ebddc5;border-radius:26px;padding:14px 16px">
+                <div style="width:56px;height:56px;border-radius:999px;flex:none;border:2px dashed #c67139;display:grid;place-items:center;font-family:ui-monospace,Menlo,monospace;font-size:9px;color:#8c491a;text-align:center">selfie</div>
+                <div style="flex:1"><div style="font-family:'Caprasimo',serif;font-size:15px">Liveness check</div><div style="font-size:11.5px;color:#82796a">Turn your head slowly, left then right. 6 seconds.</div></div>
+              </div>
+              <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:#645c50">
+                <div style="display:flex;gap:8px"><span style="color:#7a8a5e">•</span>Flat surface, no glare, all four corners visible.</div>
+                <div style="display:flex;gap:8px"><span style="color:#7a8a5e">•</span>We check the face on the ID against your selfie, not against any other photo.</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isKyc3 }}">
+            <div style="padding:20px">
+              <h2 style="font-family:'Caprasimo',serif;font-size:27px;margin:0 0 6px;line-height:1.1">Where you are, how you're paid</h2>
+              <p style="margin:0 0 18px;font-size:13px;color:#645c50">Address anchors disputes. The name on your payout account has to match your ID.</p>
+              <div style="display:flex;flex-direction:column;gap:14px">
+                <div><label style="display:block;font-size:12px;color:#645c50;margin-bottom:5px">Estate / street, county</label><input value="Kileleshwa, Nairobi" style="width:100%;min-height:42px;padding:8px 16px;font:inherit;font-size:14px;background:#ebddc5;border:1px solid #dcd3c4;border-radius:999px;color:#201e1d" style-focus="border-color:#c67139;outline:none"></div>
+                <div class="sq-strip" style="border-radius:22px;height:78px;display:grid;place-items:center;border:1px dashed #c0b6a5"><div style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#645c50">proof of address — utility bill or tenancy</div></div>
+                <div style="background:#ebddc5;border-radius:26px;padding:14px 16px;display:flex;align-items:center;gap:12px">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#56633f" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                  <div style="flex:1;font-size:12.5px">M-Pesa name <strong>A. W. OTIENO</strong> matches your ID.</div>
+                </div>
+              </div>
+              <label style="margin-top:16px;display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:#645c50;cursor:pointer">
+                <span style="width:18px;height:18px;border-radius:6px;background:#c67139;flex:none;display:grid;place-items:center">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#f5ead8" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                </span>
+                I agree to Side Qwest running these checks and re-checking them yearly.
+              </label>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ isKycDone }}">
+            <div style="padding:28px 20px;flex:1;display:flex;flex-direction:column;align-items:flex-start">
+              <div style="position:relative;width:96px;height:96px;margin-bottom:20px">
+                <div style="position:absolute;inset:0;border-radius:999px;background:#ccdbb2;animation:sqPulse 3s ease-in-out infinite"></div>
+                <div style="position:absolute;inset:14px;border-radius:999px;background:#7a8a5e;display:grid;place-items:center">
+                  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#f0fae1" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                </div>
+              </div>
+              <h2 style="font-family:'Caprasimo',serif;font-size:29px;margin:0 0 6px;line-height:1.1">You're verified, Amina</h2>
+              <p style="margin:0 0 20px;font-size:13.5px;color:#645c50">Checks cleared in 3 minutes. Your badge is visible to everyone you deal with.</p>
+              <div style="width:100%;display:flex;flex-direction:column;gap:10px">
+                <div style="display:flex;gap:10px;align-items:center;background:#ebddc5;border-radius:22px;padding:13px 16px;font-size:13px">Post Qwests and receive offers</div>
+                <div style="display:flex;gap:10px;align-items:center;background:#ebddc5;border-radius:22px;padding:13px 16px;font-size:13px">Run Qwests for neighbours</div>
+                <div style="display:flex;gap:10px;align-items:center;background:#ebddc5;border-radius:22px;padding:13px 16px;font-size:13px">Escrow up to KSh 20,000 per errand</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="flex:1"></div>
+          <div style="position:sticky;bottom:0;padding:12px 20px 34px;background:linear-gradient(#f5ead800,#f5ead8 30%)">
+            <button onClick="{{ kycNext }}" style="width:100%;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:15px;padding:14px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d" style-active="background:#8c491a">{{ kycCta }}</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ══ post a qwest ══ -->
+      <sc-if value="{{ isPost }}">
+        <div style="flex:1;display:flex;flex-direction:column;animation:sqIn .28s ease">
+          <div style="padding:8px 20px 0;display:flex;align-items:center;gap:12px">
+            <button onClick="{{ goHome }}" style="width:44px;height:44px;border-radius:999px;border:1px solid #dcd3c4;background:#f9f4ed;display:grid;place-items:center;cursor:pointer" style-hover="border-color:#c67139">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#201e1d" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+            </button>
+            <div style="font-size:12px;color:#82796a">New Qwest</div>
+          </div>
+          <div style="padding:16px 20px">
+            <h2 style="font-family:'Caprasimo',serif;font-size:27px;margin:0 0 16px;line-height:1.1">What needs doing?</h2>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+              <button onClick="{{ pickMarket }}" style="border:1px solid #c67139;background:{{ chipMarket }};color:{{ chipMarketFg }};font-size:12.5px;padding:8px 14px;border-radius:999px;cursor:pointer">Market run</button>
+              <button onClick="{{ pickShop }}" style="border:1px solid #dcd3c4;background:{{ chipShop }};color:{{ chipShopFg }};font-size:12.5px;padding:8px 14px;border-radius:999px;cursor:pointer">Shop pickup</button>
+              <button onClick="{{ pickQueue }}" style="border:1px solid #dcd3c4;background:{{ chipQueue }};color:{{ chipQueueFg }};font-size:12.5px;padding:8px 14px;border-radius:999px;cursor:pointer">Queue standing</button>
+              <button onClick="{{ pickDoc }}" style="border:1px solid #dcd3c4;background:{{ chipDoc }};color:{{ chipDocFg }};font-size:12.5px;padding:8px 14px;border-radius:999px;cursor:pointer">Document drop-off</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div><label style="display:block;font-size:12px;color:#645c50;margin-bottom:5px">Title</label><input value="Sukuma, tomatoes and 2kg unga from Toi" style="width:100%;min-height:42px;padding:8px 16px;font:inherit;font-size:14px;background:#ebddc5;border:1px solid #dcd3c4;border-radius:999px;color:#201e1d" style-focus="border-color:#c67139;outline:none"></div>
+              <div><label style="display:block;font-size:12px;color:#645c50;margin-bottom:5px">Notes for the runner</label><textarea style="width:100%;min-height:78px;padding:12px 16px;font:inherit;font-size:14px;background:#ebddc5;border:1px solid #dcd3c4;border-radius:22px;color:#201e1d;resize:vertical" style-focus="border-color:#c67139;outline:none">Firm tomatoes please. Kasuku unga if they have it. Gate 4, ask for Amina.</textarea></div>
+              <div style="display:flex;gap:10px">
+                <div style="flex:1"><label style="display:block;font-size:12px;color:#645c50;margin-bottom:5px">Pick up</label><input value="Toi Market" style="width:100%;min-height:42px;padding:8px 16px;font:inherit;font-size:14px;background:#ebddc5;border:1px solid #dcd3c4;border-radius:999px;color:#201e1d" style-focus="border-color:#c67139;outline:none"></div>
+                <div style="flex:1"><label style="display:block;font-size:12px;color:#645c50;margin-bottom:5px">Drop off</label><input value="Kileleshwa" style="width:100%;min-height:42px;padding:8px 16px;font:inherit;font-size:14px;background:#ebddc5;border:1px solid #dcd3c4;border-radius:999px;color:#201e1d" style-focus="border-color:#c67139;outline:none"></div>
+              </div>
+            </div>
+            <div style="margin-top:18px;background:#fff2eb;border-radius:26px;padding:16px">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#8c491a">One-time Qwest card</div>
+                <span style="background:#ffe1d0;color:#8c491a;font-size:10.5px;padding:3px 9px;border-radius:999px">{{ modeName }}</span>
+              </div>
+              <p style="margin:0;font-size:12.5px;color:#645c50">{{ moneyBody }}</p>
+            </div>
+            <div style="margin-top:18px">
+              <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a;margin-bottom:8px">Set a clock on it</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button onClick="{{ setD30 }}" style="min-height:40px;border:1px solid #dcd3c4;background:{{ dChip30 }};color:{{ dFg30 }};font-size:12.5px;padding:8px 15px;border-radius:999px;cursor:pointer">30 minutes</button>
+                <button onClick="{{ setD1 }}" style="min-height:40px;border:1px solid #dcd3c4;background:{{ dChip1 }};color:{{ dFg1 }};font-size:12.5px;padding:8px 15px;border-radius:999px;cursor:pointer">1 hour</button>
+                <button onClick="{{ setD2 }}" style="min-height:40px;border:1px solid #dcd3c4;background:{{ dChip2 }};color:{{ dFg2 }};font-size:12.5px;padding:8px 15px;border-radius:999px;cursor:pointer">2 hours</button>
+                <button onClick="{{ setDEve }}" style="min-height:40px;border:1px solid #dcd3c4;background:{{ dChipEve }};color:{{ dFgEve }};font-size:12.5px;padding:8px 15px;border-radius:999px;cursor:pointer">By 6pm</button>
+              </div>
+              <button onClick="{{ toggleBonus }}" style="width:100%;min-height:48px;margin-top:10px;display:flex;align-items:center;gap:12px;text-align:left;border:1px solid #dcd3c4;background:#f9f4ed;border-radius:24px;padding:12px 15px;cursor:pointer" style-hover="border-color:#c67139">
+                <span style="width:44px;height:26px;border-radius:999px;background:#dcd3c4;flex:none;position:relative;display:block">
+                  <sc-if value="{{ bonusOn }}"><span style="position:absolute;inset:0;border-radius:999px;background:#7a8a5e"></span></sc-if>
+                  <span style="position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:999px;background:#f9f4ed"></span>
+                </span>
+                <span style="flex:1"><span style="display:block;font-size:13.5px">{{ bonusLabel }}</span><span style="display:block;font-size:11.5px;color:#82796a">Paid from your wallet if the clock is beaten</span></span>
+              </button>
+            </div>
+            <div style="margin-top:16px;display:flex;align-items:center;justify-content:space-between;font-size:12.5px;color:#645c50">
+              <span>Typical fee · {{ deadline }} window</span><strong style="font-family:'Caprasimo',serif;font-size:16px;color:#201e1d">KSh 250–450</strong>
+            </div>
+          </div>
+          <div style="flex:1"></div>
+          <div style="position:sticky;bottom:0;padding:12px 20px 34px;background:linear-gradient(#f5ead800,#f5ead8 30%)">
+            <button onClick="{{ submitPost }}" style="width:100%;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:15px;padding:14px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d" style-active="background:#8c491a">Post and collect offers</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ══ offers / bids ══ -->
+      <sc-if value="{{ isBids }}">
+        <div style="flex:1;display:flex;flex-direction:column;animation:sqIn .28s ease">
+          <div style="padding:8px 20px 0;display:flex;align-items:center;gap:12px">
+            <button onClick="{{ goHome }}" style="width:44px;height:44px;border-radius:999px;border:1px solid #dcd3c4;background:#f9f4ed;display:grid;place-items:center;cursor:pointer" style-hover="border-color:#c67139">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#201e1d" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+            </button>
+            <div style="font-size:12px;color:#82796a">Sukuma, tomatoes, unga · Toi Market</div>
+          </div>
+          <div style="padding:14px 20px 0">
+            <h2 style="font-family:'Caprasimo',serif;font-size:26px;margin:0 0 4px;line-height:1.1">Three neighbours offered</h2>
+            <p style="margin:0;font-size:12.5px;color:#645c50">Bids came in blind — nobody saw anyone else's price. Every runner here is ID verified.</p>
+          </div>
+
+          <sc-if value="{{ bidsLoading }}">
+            <div style="padding:16px 20px 0;display:flex;flex-direction:column;gap:12px">
+              <div style="background:#f0eadc;border-radius:28px;height:132px;animation:sqPulse 1.4s ease-in-out infinite"></div>
+              <div style="background:#f0eadc;border-radius:28px;height:132px;animation:sqPulse 1.4s ease-in-out .2s infinite"></div>
+              <div style="font-size:12.5px;color:#82796a;text-align:center;padding-top:4px">Collecting sealed bids from runners nearby…</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ bidCards }}">
+            <div style="padding:16px 20px 0;display:flex;flex-direction:column;gap:12px">
+              <sc-for list="{{ bids }}" as="b" hint-placeholder-count="3">
+                <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:28px;padding:16px">
+                  <div style="display:flex;gap:12px;align-items:center">
+                    <div style="width:48px;height:48px;border-radius:999px;background:#dcd3c4;display:grid;place-items:center;font-family:'Caprasimo',serif;font-size:16px;color:#645c50;flex:none">{{ b.initials }}</div>
+                    <div style="flex:1;min-width:0">
+                      <div style="display:flex;align-items:center;gap:6px">
+                        <span style="font-family:'Caprasimo',serif;font-size:16px">{{ b.name }}</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7a8a5e" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"></path></svg>
+                      </div>
+                      <div style="font-size:11.5px;color:#82796a">★ {{ b.rating }} · {{ b.jobs }} Qwests · {{ b.dist }} away</div>
+                    </div>
+                    <div style="text-align:right">
+                      <div style="font-family:'Caprasimo',serif;font-size:19px">KSh {{ b.fee }}</div>
+                      <div style="font-size:11px;color:#82796a">{{ b.eta }}</div>
+                    </div>
+                  </div>
+                  <p style="margin:12px 0 0;font-size:12.5px;color:#645c50">{{ b.note }}</p>
+                  <div style="display:flex;gap:8px;margin-top:12px">
+                    <button onClick="{{ b.choose }}" style="flex:1;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:13.5px;padding:11px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d">Choose {{ b.first }}</button>
+                    <button style="border:1px solid #dcd3c4;background:transparent;color:#645c50;font-size:12.5px;padding:11px 16px;border-radius:999px;cursor:pointer" style-hover="background:#ebddc5">Profile</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ bidCompare }}">
+            <div style="padding:16px 20px 0">
+              <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:28px;overflow:hidden">
+                <sc-for list="{{ bids }}" as="b" hint-placeholder-count="3">
+                  <button onClick="{{ b.choose }}" style="width:100%;text-align:left;border:0;border-bottom:1px solid #ece0ca;background:transparent;padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px" style-hover="background:#fff2eb">
+                    <div style="width:36px;height:36px;border-radius:999px;background:#dcd3c4;display:grid;place-items:center;font-size:12px;color:#645c50;flex:none">{{ b.initials }}</div>
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:14px;font-weight:600">{{ b.name }}</div>
+                      <div style="font-size:11px;color:#82796a">★ {{ b.rating }} · {{ b.jobs }} done · {{ b.dist }} · {{ b.eta }}</div>
+                    </div>
+                    <div style="font-family:'Caprasimo',serif;font-size:17px">{{ b.fee }}</div>
+                  </button>
+                </sc-for>
+                <div style="padding:12px 16px;font-size:11.5px;color:#82796a">Tap a row to accept. Fees in KSh.</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="flex:1"></div>
+          <div style="padding:14px 20px 34px;font-size:11.5px;color:#82796a">Offers expire in 12 minutes. If none suit you, raise the guide fee and re-open bidding.</div>
+        </div>
+      </sc-if>
+
+      <!-- ══ live tracking ══ -->
+      <sc-if value="{{ isTrack }}">
+        <div style="flex:1;display:flex;flex-direction:column;animation:sqIn .28s ease">
+          <div style="padding:8px 20px 0;display:flex;align-items:center;gap:10px">
+            <button onClick="{{ goHome }}" style="width:44px;height:44px;flex:none;border-radius:999px;border:1px solid #dcd3c4;background:#f9f4ed;display:grid;place-items:center;cursor:pointer" style-hover="border-color:#c67139">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#201e1d" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+            </button>
+            <div style="flex:1;min-width:0;display:flex;align-items:center;gap:7px;background:{{ clockBg }};color:{{ clockFg }};border-radius:999px;padding:10px 14px;font-size:13px">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round" style="flex:none"><circle cx="12" cy="12" r="8.5"></circle><path d="M12 8v4.5l3 2"></path></svg>
+              <span style="font-variant-numeric:tabular-nums;white-space:nowrap">{{ clock }}</span>
+              <span style="margin-left:auto;opacity:.75;font-size:11px;white-space:nowrap">+50 on time</span>
+            </div>
+            <button onClick="{{ openSos }}" style="min-height:44px;flex:none;border:0;background:#8c491a;color:#fff2eb;font-family:'Caprasimo',serif;font-size:12.5px;padding:9px 18px;border-radius:999px;cursor:pointer" style-hover="background:#643312">SOS</button>
+          </div>
+
+          <sc-if value="{{ trackMap }}">
+            <div class="sq-strip" style="margin:14px 20px 0;height:210px;border-radius:28px;border:1px solid #dcd3c4;position:relative;overflow:hidden">
+              <div style="position:absolute;left:22%;top:64%;width:14px;height:14px;border-radius:999px;background:#7a8a5e"></div>
+              <div style="position:absolute;left:70%;top:26%;width:14px;height:14px;border-radius:999px;background:#c67139"></div>
+              <div style="position:absolute;left:44%;top:44%;width:22px;height:22px;border-radius:999px;background:#c67139;box-shadow:0 0 0 8px rgba(198,113,57,.22)"></div>
+              <div style="position:absolute;left:12px;bottom:12px;font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#645c50;background:#f5ead8;padding:4px 8px;border-radius:999px">live map — Toi → Kileleshwa</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ trackTimeline }}">
+            <div style="margin:14px 20px 0;background:#f9f4ed;border:1px solid #dcd3c4;border-radius:28px;padding:18px 18px 14px">
+              <div style="display:flex;gap:12px"><div style="width:10px;height:10px;border-radius:999px;background:#7a8a5e;margin-top:5px;flex:none"></div><div style="flex:1;padding-bottom:14px;border-left:0"><div style="font-size:13.5px;font-weight:600">Accepted · 10:42</div><div style="font-size:12px;color:#82796a">Grace agreed KSh 350</div></div></div>
+              <div style="display:flex;gap:12px"><div style="width:10px;height:10px;border-radius:999px;background:#7a8a5e;margin-top:5px;flex:none"></div><div style="flex:1;padding-bottom:14px"><div style="font-size:13.5px;font-weight:600">At Toi Market · 11:05</div><div style="font-size:12px;color:#82796a">Shopping your list</div></div></div>
+              <div style="display:flex;gap:12px"><div style="width:10px;height:10px;border-radius:999px;background:#c67139;margin-top:5px;flex:none"></div><div style="flex:1"><div style="font-size:13.5px;font-weight:600">Basket ready for approval</div><div style="font-size:12px;color:#82796a">Waiting on you — funds release on approval</div></div></div>
+            </div>
+          </sc-if>
+
+          <div style="margin:14px 20px 0;background:#f9f4ed;border:1px solid #dcd3c4;border-radius:28px;padding:16px;display:flex;gap:12px;align-items:center">
+            <div style="width:52px;height:52px;border-radius:999px;background:#dcd3c4;display:grid;place-items:center;font-family:'Caprasimo',serif;font-size:17px;color:#645c50;flex:none">GN</div>
+            <div style="flex:1">
+              <div style="display:flex;align-items:center;gap:6px"><span style="font-family:'Caprasimo',serif;font-size:17px">Grace N.</span><span style="background:#f0fae1;color:#56633f;font-size:10.5px;padding:3px 9px;border-radius:999px">ID verified</span></div>
+              <div style="font-size:11.5px;color:#82796a">★ 4.9 · 214 Qwests · photo matched at pickup</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button style="width:36px;height:36px;border-radius:999px;border:1px solid #dcd3c4;background:transparent;display:grid;place-items:center;cursor:pointer" style-hover="background:#ebddc5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#201e1d" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h5l2 5-3 2a12 12 0 005 5l2-3 5 2v5c-9 0-16-7-16-16z"></path></svg></button>
+            </div>
+          </div>
+
+          <div style="margin:12px 20px 0;display:flex;gap:14px;align-items:center;background:#ebddc5;border-radius:26px;padding:14px 18px">
+            <div class="sq-strip" style="width:76px;height:76px;border-radius:18px;flex:none;border:1px solid #c0b6a5;display:grid;place-items:center"><span style="font-family:ui-monospace,Menlo,monospace;font-size:9px;color:#645c50">QR</span></div>
+            <div style="flex:1">
+              <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a">Handover code</div>
+              <div style="font-size:12.5px;color:#645c50;margin-top:3px">Grace scans this when the goods are in your hands. Nothing releases before the scan.</div>
+            </div>
+          </div>
+
+          <div style="flex:1"></div>
+
+          <sc-if value="{{ modeMarket }}">
+            <div style="position:sticky;bottom:0;background:#f9f4ed;border-top:1px solid #dcd3c4;border-radius:34px 34px 0 0;padding:18px 20px 34px;box-shadow:0 -12px 32px rgba(46,43,37,.14)">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">
+                <div style="font-family:'Caprasimo',serif;font-size:19px">{{ tTrackTitle }}</div>
+                <span style="font-size:11.5px;color:#82796a">{{ legsLabel }}</span>
+              </div>
+              <p style="margin:0 0 12px;font-size:12.5px;color:#645c50">{{ progressLabel }}</p>
+
+              <sc-if value="{{ hasExceptions }}">
+                <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+                  <sc-for list="{{ exceptions }}" as="e" hint-placeholder-count="1">
+                    <div style="background:#fff2eb;border:1px solid #ffc6a5;border-radius:20px;padding:13px">
+                      <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#8c491a">{{ e.vendor }}</div>
+                      <div style="font-size:13px;margin:5px 0 10px">{{ e.ask }}</div>
+                      <div style="display:flex;gap:8px">
+                        <sc-if value="{{ e.escalated }}">
+                          <button onClick="{{ e.override }}" style="flex:1;min-height:44px;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:13px;padding:11px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d">Approve this line</button>
+                        </sc-if>
+                        <sc-if value="{{ e.subPending }}">
+                          <button onClick="{{ e.accept }}" style="flex:1;min-height:44px;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:13px;padding:11px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d">Accept substitute</button>
+                          <button onClick="{{ e.decline }}" style="min-height:44px;border:1px solid #c0b6a5;background:transparent;color:#645c50;font-size:12.5px;padding:11px 15px;border-radius:999px;cursor:pointer" style-hover="background:#ebddc5">Drop it</button>
+                        </sc-if>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <sc-for list="{{ vendors }}" as="v" hint-placeholder-count="3">
+                <div style="padding:10px 0;border-bottom:1px solid #ece0ca">
+                  <div style="display:flex;align-items:center;gap:10px">
+                    <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600">{{ v.name }}</div><div style="font-size:11.5px;color:#82796a">{{ v.shotLabel }}</div></div>
+                    <div style="font-size:13.5px;color:#645c50">KSh {{ v.subtotal }}</div>
+                    <span style="background:{{ v.statusBg }};color:{{ v.statusFg }};font-size:11px;padding:5px 11px;border-radius:999px;white-space:nowrap">{{ v.statusLabel }}</span>
+                  </div>
+                  <sc-if value="{{ v.awaiting }}">
+                    <button onClick="{{ v.approve }}" style="width:100%;min-height:46px;margin-top:9px;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:13.5px;padding:12px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d" style-active="background:#8c491a">{{ v.approveLabel }}</button>
+                  </sc-if>
+                </div>
+              </sc-for>
+
+              <div style="display:flex;gap:8px;margin-top:12px">
+                <button onClick="{{ goCard }}" style="flex:1;min-height:46px;border:0;background:#ebddc5;color:#201e1d;font-family:'Caprasimo',serif;font-size:13.5px;padding:12px;border-radius:999px;cursor:pointer" style-hover="background:#e2d2b5">See the runner's card</button>
+                <button onClick="{{ goChat }}" style="min-height:46px;border:1px solid #dcd3c4;background:transparent;color:#645c50;font-size:12.5px;padding:12px 16px;border-radius:999px;cursor:pointer" style-hover="background:#ebddc5">Message Grace</button>
+              </div>
+              <p style="margin:10px 0 0;font-size:12px;color:#82796a">You approve each stall before the card can pay it. Rejected photos and substitutions come to you as a decision, not a notification.</p>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ modeShop }}">
+            <div style="position:sticky;bottom:0;background:#f9f4ed;border-top:1px solid #dcd3c4;border-radius:34px 34px 0 0;padding:18px 20px 34px;box-shadow:0 -12px 32px rgba(46,43,37,.14)">
+              <div style="font-family:'Caprasimo',serif;font-size:19px;margin-bottom:10px">Receipt release</div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;color:#645c50;padding:7px 0;border-bottom:1px solid #ece0ca"><span>Card charged at Naivas Kileleshwa</span><span>KSh 2,340</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;color:#645c50;padding:7px 0;border-bottom:1px solid #ece0ca"><span>Receipt total read</span><span>KSh 2,340</span></div>
+              <div class="sq-strip" style="margin:12px 0;height:62px;border-radius:20px;display:grid;place-items:center"><span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#645c50">receipt photo</span></div>
+              <sc-if value="{{ receiptPending }}">
+                <button onClick="{{ matchReceipt }}" style="width:100%;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:14.5px;padding:13px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d">Match receipt to card charge</button>
+              </sc-if>
+              <sc-if value="{{ receiptMatched }}">
+                <div style="display:flex;align-items:center;gap:10px;background:#f0fae1;border-radius:999px;padding:12px 18px;font-size:13px;color:#56633f">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#56633f" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                  Matched — goods and fee released, no approval needed
+                </div>
+              </sc-if>
+              <p style="margin:10px 0 0;font-size:11.5px;color:#82796a">Mismatch over KSh 100 holds the funds and asks you instead.</p>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ modeConfirm }}">
+            <div style="position:sticky;bottom:0;background:#f9f4ed;border-top:1px solid #dcd3c4;border-radius:34px 34px 0 0;padding:18px 20px 34px;box-shadow:0 -12px 32px rgba(46,43,37,.14)">
+              <div style="font-family:'Caprasimo',serif;font-size:19px;margin-bottom:6px">You release this one</div>
+              <p style="margin:0 0 12px;font-size:12.5px;color:#645c50">Nothing was bought, so the card carries the fee only. Give the PIN at handover, then cash it out.</p>
+              <div style="display:flex;justify-content:space-between;font-size:13px;color:#645c50;padding:7px 0;border-bottom:1px solid #ece0ca"><span>Agreed fee</span><span>KSh 350</span></div>
+              <div style="display:flex;justify-content:space-between;font-size:13px;color:#645c50;padding:7px 0"><span>Card voids after release</span><span>•••• 4417</span></div>
+              <button onClick="{{ confirmDrop }}" style="width:100%;margin-top:10px;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:14.5px;padding:13px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d" style-active="background:#8c491a">{{ dropCta }}</button>
+            </div>
+          </sc-if>
+
+        </div>
+      </sc-if>
+
+      <!-- ══ chat thread ══ -->
+      <sc-if value="{{ isChat }}">
+        <div style="flex:1;display:flex;flex-direction:column;animation:sqIn .28s ease">
+          <div style="padding:8px 20px 0;display:flex;align-items:center;gap:12px">
+            <button onClick="{{ goTrack }}" style="width:44px;height:44px;border-radius:999px;border:1px solid #dcd3c4;background:#f9f4ed;display:grid;place-items:center;cursor:pointer" style-hover="border-color:#c67139">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#201e1d" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+            </button>
+            <div style="width:38px;height:38px;border-radius:999px;background:#dcd3c4;display:grid;place-items:center;font-size:12px;color:#645c50">GN</div>
+            <div><div style="font-size:14.5px;font-weight:600">Grace N.</div><div style="font-size:11.5px;color:#82796a">ID verified · on this Qwest</div></div>
+          </div>
+          <div style="flex:1;padding:18px 20px 0;display:flex;flex-direction:column;gap:10px">
+            <sc-for list="{{ messages }}" as="m" hint-placeholder-count="3">
+              <div style="display:flex;justify-content:{{ m.align }}">
+                <div style="max-width:78%;background:{{ m.bg }};color:{{ m.fg }};border-radius:22px;padding:11px 15px;font-size:13.5px;line-height:1.45">{{ m.text }}</div>
+              </div>
+            </sc-for>
+            <div style="font-size:11.5px;color:#82796a;text-align:center;padding-top:6px">Messages stay attached to this Qwest and join the evidence pack if a report is opened.</div>
+          </div>
+          <div style="position:sticky;bottom:0;padding:12px 20px 34px;background:linear-gradient(#f5ead800,#f5ead8 30%);display:flex;flex-direction:column;gap:8px">
+            <button onClick="{{ sendYes }}" style="min-height:46px;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:14px;padding:12px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d">Yes, take the Jogoo</button>
+            <button onClick="{{ sendWait }}" style="min-height:46px;border:1px solid #dcd3c4;background:transparent;color:#201e1d;font-size:13px;padding:12px;border-radius:999px;cursor:pointer" style-hover="background:#ebddc5">Skip it this time</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ══ runner verification (heavier tier) ══ -->
+      <sc-if value="{{ isRkyc }}">
+        <div style="flex:1;display:flex;flex-direction:column;animation:sqIn .28s ease">
+          <div style="padding:8px 20px 0;display:flex;align-items:center;gap:12px">
+            <button onClick="{{ goRunner }}" style="width:44px;height:44px;border-radius:999px;border:1px solid #dcd3c4;background:#f9f4ed;display:grid;place-items:center;cursor:pointer" style-hover="border-color:#7a8a5e">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#201e1d" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+            </button>
+            <div style="font-size:12px;color:#82796a">Runner verification · tier 3</div>
+          </div>
+          <div style="padding:16px 20px">
+            <h2 style="font-family:'Caprasimo',serif;font-size:27px;margin:0 0 6px;line-height:1.1">Running for others asks more</h2>
+            <p style="margin:0 0 18px;font-size:13.5px;color:#645c50">You already passed ID, address and payout checks. Runners carry other people's money, so three more before your first Qwest.</p>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div style="background:#f9f4ed;border:1px solid #ccdbb2;border-radius:24px;padding:15px">
+                <div style="display:flex;align-items:center;gap:10px"><span style="width:26px;height:26px;border-radius:999px;background:#7a8a5e;display:grid;place-items:center;flex:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f0fae1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg></span><div style="font-family:'Caprasimo',serif;font-size:15.5px">Certificate of good conduct</div></div>
+                <div style="font-size:12.5px;color:#645c50;margin-top:7px">DCI certificate, under 12 months old. Checked against the register and re-checked yearly.</div>
+              </div>
+              <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:24px;padding:15px">
+                <div style="font-family:'Caprasimo',serif;font-size:15.5px">Next of kin</div>
+                <div style="font-size:12.5px;color:#645c50;margin-top:6px">One contact we can reach if something happens while you are out. Never shown to requesters.</div>
+                <input value="Wanjiku Otieno · +254 733 118 240" style="width:100%;min-height:44px;margin-top:10px;padding:8px 16px;font:inherit;font-size:14px;background:#ebddc5;border:1px solid #dcd3c4;border-radius:999px;color:#201e1d" style-focus="border-color:#7a8a5e;outline:none">
+              </div>
+              <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:24px;padding:15px">
+                <div style="font-family:'Caprasimo',serif;font-size:15.5px">How you move</div>
+                <div style="font-size:12.5px;color:#645c50;margin-top:6px">Boda riders add plate, licence and insurance. On foot needs none of it.</div>
+                <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+                  <span style="background:#f0fae1;color:#56633f;font-size:12.5px;padding:8px 14px;border-radius:999px">On foot</span>
+                  <span style="background:#ebddc5;color:#645c50;font-size:12.5px;padding:8px 14px;border-radius:999px">Boda</span>
+                  <span style="background:#ebddc5;color:#645c50;font-size:12.5px;padding:8px 14px;border-radius:999px">Matatu</span>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:16px;background:#f0fae1;border-radius:26px;padding:16px;font-size:12.5px;color:#56633f">Clearing tier 3 unlocks batching — several Qwests in one region on one trip — and lets past requesters invite you directly.</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ══ runner: one-time Qwest card ══ -->
+      <sc-if value="{{ isCard }}">
+        <div style="flex:1;display:flex;flex-direction:column;animation:sqIn .28s ease">
+          <div style="padding:8px 20px 0;display:flex;align-items:center;gap:12px">
+            <button onClick="{{ goTrack }}" style="width:44px;height:44px;border-radius:999px;border:1px solid #dcd3c4;background:#f9f4ed;display:grid;place-items:center;cursor:pointer" style-hover="border-color:#c67139">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#201e1d" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+            </button>
+            <div style="font-size:12px;color:#82796a">Runner view · Qwest card</div>
+          </div>
+
+          <div style="margin:14px 20px 0;background:#c67139;color:#fff2eb;border-radius:30px;padding:20px;position:relative;overflow:hidden">
+            <div style="position:absolute;right:-40px;top:-40px;width:150px;height:150px;border-radius:999px;background:rgba(255,242,235,.14)"></div>
+            <div style="position:relative">
+              <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;opacity:.85">One-time card · voids at handover</div>
+              <div style="font-family:'Caprasimo',serif;font-size:23px;letter-spacing:.04em;white-space:nowrap;margin:10px 0 14px">•••• •••• •••• 4417</div>
+              <div style="display:flex;gap:18px;align-items:flex-end;flex-wrap:nowrap">
+                <div style="flex:none"><div style="font-size:10.5px;opacity:.8">Live balance</div><div style="font-family:'Caprasimo',serif;font-size:21px;white-space:nowrap">KSh {{ cardLoaded }}</div></div>
+                <div style="flex:none"><div style="font-size:10.5px;opacity:.8">Errand cap</div><div style="font-size:13.5px;white-space:nowrap">KSh {{ cardCap }}</div></div>
+                <div style="margin-left:auto;font-size:10.5px;opacity:.85;text-align:right;white-space:nowrap">Toi Market<br>Qwest #4482</div>
+              </div>
+              <sc-if value="{{ hasReqSettled }}">
+                <div style="position:relative;margin-top:12px;background:rgba(255,242,235,.18);border-radius:16px;padding:9px 13px;font-size:11.5px">KSh {{ reqSettled }} settled by Amina at the till — reimbursed to her from escrow at close, never on this card.</div>
+              </sc-if>
+            </div>
+          </div>
+
+          <sc-if value="{{ modeMarket }}">
+            <div style="padding:16px 20px 0">
+              <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a;margin-bottom:4px">{{ tCardKicker }}</div>
+              <p style="margin:0 0 12px;font-size:13px;color:#645c50">{{ tCardBody }}</p>
+              <div style="display:flex;flex-direction:column;gap:12px">
+                <sc-for list="{{ vendors }}" as="v" hint-placeholder-count="3">
+                  <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:26px;padding:16px">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                      <div style="flex:1;min-width:0"><div style="font-family:'Caprasimo',serif;font-size:16px">{{ v.name }}</div><div style="font-size:11.5px;color:#82796a">{{ v.shotLabel }} · KSh {{ v.subtotal }}</div></div>
+                      <span style="background:{{ v.statusBg }};color:{{ v.statusFg }};font-size:11px;padding:5px 11px;border-radius:999px">{{ v.statusLabel }}</span>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:8px">
+                      <sc-for list="{{ v.items }}" as="it" hint-placeholder-count="2">
+                        <div style="background:#ebddc5;border-radius:20px;padding:10px 12px">
+                          <button onClick="{{ it.toggle }}" style="width:100%;min-height:44px;text-align:left;border:0;background:transparent;cursor:pointer;display:flex;align-items:center;gap:11px;padding:0">
+                            <span style="width:44px;height:44px;border-radius:15px;flex:none;background:{{ it.shotBg }};border:1.5px dashed {{ it.shotBorder }};display:grid;place-items:center">
+                              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#f5ead8" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="3.4"></circle><path d="M4 8h4l1.5-2h5L16 8h4v11H4z"></path></svg>
+                            </span>
+                            <span style="flex:1;min-width:0"><span style="display:block;font-size:13.5px">{{ it.label }}</span><span style="display:block;font-size:11.5px;color:#82796a">{{ it.shotLabel }}</span></span>
+                            <span style="font-size:13.5px;color:#645c50">KSh {{ it.priceLabel }}</span>
+                          </button>
+                          <sc-if value="{{ it.rejected }}">
+                            <div style="margin-top:9px;display:flex;align-items:center;gap:9px;background:#ffe1d0;border-radius:16px;padding:9px 12px">
+                              <span style="flex:1;font-size:11.5px;color:#8c491a">Blurred — one retake left before Amina is asked</span>
+                              <button onClick="{{ it.toggle }}" style="min-height:36px;border:0;background:#8c491a;color:#fff2eb;font-size:12px;padding:0 14px;border-radius:999px;cursor:pointer" style-hover="background:#643312">Retake</button>
+                            </div>
+                          </sc-if>
+                          <sc-if value="{{ it.escalated }}">
+                            <div style="margin-top:9px;background:#fff2eb;border-radius:16px;padding:9px 12px;font-size:11.5px;color:#8c491a">Two failed photos — Amina decides this line now.</div>
+                          </sc-if>
+                          <sc-if value="{{ it.canPropose }}">
+                            <button onClick="{{ it.propose }}" style="width:100%;min-height:40px;margin-top:9px;border:1px solid #c0b6a5;background:transparent;color:#645c50;font-size:12px;border-radius:999px;cursor:pointer" style-hover="background:#e2d2b5">Out of stock — propose a substitute</button>
+                          </sc-if>
+                          <sc-if value="{{ it.subPending }}">
+                            <div style="margin-top:9px;background:#fff2eb;border-radius:16px;padding:9px 12px;font-size:11.5px;color:#8c491a">Proposed {{ it.subLine }} — waiting on Amina</div>
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <sc-if value="{{ v.canSend }}">
+                      <button onClick="{{ v.send }}" style="width:100%;min-height:46px;margin-top:12px;border:0;background:#7a8a5e;color:#f0fae1;font-family:'Caprasimo',serif;font-size:14px;padding:12px;border-radius:999px;cursor:pointer" style-hover="background:#728157">{{ v.sendLabel }}</button>
+                    </sc-if>
+                    <sc-if value="{{ v.stillShopping }}">
+                      <div style="margin-top:12px;font-size:12px;color:#82796a">Every line needs accepted evidence before this stall can go for approval.</div>
+                    </sc-if>
+                    <sc-if value="{{ v.awaiting }}">
+                      <div style="margin-top:12px;display:flex;align-items:center;gap:9px;background:#fff2eb;border-radius:999px;padding:11px 15px;font-size:12.5px;color:#8c491a">
+                        <span style="width:9px;height:9px;border-radius:999px;background:#c67139;animation:sqPulse 1.8s ease-in-out infinite"></span>Sent — Amina is approving KSh {{ v.subtotal }}
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ v.canPay }}">
+                      <button onClick="{{ v.pay }}" style="width:100%;min-height:46px;margin-top:12px;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:14px;padding:12px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d">{{ v.payLabel }}</button>
+                    </sc-if>
+                    <sc-if value="{{ v.declined }}">
+                      <div style="margin-top:12px;background:#fff2eb;border:1px solid #ffc6a5;border-radius:20px;padding:13px">
+                        <div style="font-size:12.5px;color:#8c491a;margin-bottom:10px">Card declined at this stall — the trader has no terminal. Two ways out, both from the same held money:</div>
+                        <div style="display:flex;flex-direction:column;gap:8px">
+                          <button onClick="{{ resolveTill }}" style="min-height:44px;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:13.5px;padding:11px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d">Pay the M-Pesa till from the card balance</button>
+                          <button onClick="{{ resolveRequester }}" style="min-height:44px;border:1px solid #c0b6a5;background:transparent;color:#201e1d;font-size:12.5px;padding:11px;border-radius:999px;cursor:pointer" style-hover="background:#e2d2b5">Ask Amina to pay the till, reimburse her at close</button>
+                        </div>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ v.paid }}">
+                      <div style="margin-top:12px;display:flex;align-items:center;gap:9px;background:#f0fae1;border-radius:20px;padding:11px 15px;font-size:12.5px;color:#56633f">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#56633f" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"></path></svg>
+                        <span>KSh {{ v.subtotal }} · {{ v.paidNote }}</span>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="margin:16px 0 0;background:#ebddc5;border-radius:26px;padding:16px;font-size:12.5px;color:#3b3730">Unspent balance goes back to Amina when the Qwest closes. The card cannot be used anywhere else, and nothing on it is your money.</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ modeShop }}">
+            <div style="padding:16px 20px 0">
+              <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a;margin-bottom:4px">Pay, then photograph the receipt</div>
+              <p style="margin:0 0 12px;font-size:12.5px;color:#645c50">One merchant, one charge. Tap the card at the till, then snap the receipt — we match the total and release without troubling Amina.</p>
+              <div class="sq-strip" style="border-radius:24px;height:150px;border:1px dashed #c0b6a5;display:grid;place-items:center"><span style="font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#645c50">receipt photo — tap to capture</span></div>
+              <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;justify-content:space-between;font-size:13px;color:#645c50;background:#ebddc5;border-radius:20px;padding:11px 16px"><span>Card charge</span><span>KSh 2,340</span></div>
+                <div style="display:flex;justify-content:space-between;font-size:13px;color:#645c50;background:#ebddc5;border-radius:20px;padding:11px 16px"><span>Receipt read</span><span>KSh 2,340</span></div>
+              </div>
+              <div style="margin-top:14px;background:#f0fae1;border-radius:26px;padding:16px;font-size:12.5px;color:#56633f">Totals inside KSh 100 release straight away. Anything wider goes to Amina to approve.</div>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ modeConfirm }}">
+            <div style="padding:16px 20px 0">
+              <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a;margin-bottom:4px">Nothing to buy on this one</div>
+              <p style="margin:0 0 14px;font-size:12.5px;color:#645c50">The card carries your fee only. Amina cashes it out when you give the handover PIN — so keep the PIN for the doorstep.</p>
+              <div style="background:#ebddc5;border-radius:26px;padding:18px">
+                <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a">Your fee, waiting</div>
+                <div style="font-family:'Caprasimo',serif;font-size:30px;margin:4px 0 2px">KSh 350</div>
+                <div style="font-size:12px;color:#645c50">Releases to M-Pesa the moment the PIN matches</div>
+              </div>
+              <div style="margin-top:14px;background:#f0fae1;border-radius:26px;padding:16px;font-size:12.5px;color:#56633f">If Amina goes quiet, the errand auto-settles 12 hours after a verified handover.</div>
+            </div>
+          </sc-if>
+
+          <div style="height:34px"></div>
+        </div>
+      </sc-if>
+
+      <!-- ══ wallet ══ -->
+      <sc-if value="{{ isWallet }}">
+        <div style="flex:1;display:flex;flex-direction:column;animation:sqIn .28s ease">
+          <div style="padding:8px 20px 0;display:flex;align-items:center;gap:12px">
+            <button onClick="{{ goHome }}" style="width:44px;height:44px;border-radius:999px;border:1px solid #dcd3c4;background:#f9f4ed;display:grid;place-items:center;cursor:pointer" style-hover="border-color:#c67139">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#201e1d" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+            </button>
+            <div style="font-size:12px;color:#82796a">Wallet</div>
+          </div>
+          <div style="padding:16px 20px">
+            <div style="background:#ebddc5;border-radius:30px;padding:20px">
+              <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a">Available</div>
+              <div style="font-family:'Caprasimo',serif;font-size:38px;line-height:1.1;margin:4px 0 2px">KSh 7,420</div>
+              <div style="font-size:12.5px;color:#645c50">KSh 1,190 held in escrow for one Qwest</div>
+              <div style="display:flex;gap:8px;margin-top:16px">
+                <button style="flex:1;border:0;background:#c67139;color:#f5ead8;font-family:'Caprasimo',serif;font-size:13.5px;padding:12px;border-radius:999px;cursor:pointer" style-hover="background:#b2622d">Top up M-Pesa</button>
+                <button style="flex:1;border:1px solid #c0b6a5;background:transparent;color:#201e1d;font-size:13px;padding:12px;border-radius:999px;cursor:pointer" style-hover="background:#e2d2b5">Withdraw</button>
+              </div>
+            </div>
+            <div style="margin-top:18px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a;margin-bottom:10px">Cards open right now</div>
+            <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:26px;padding:16px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="flex:1"><div style="font-size:13.5px;font-weight:600">Qwest #4482 · Toi market run</div><div style="font-size:11.5px;color:#82796a">•••• 4417 · voids at handover</div></div>
+                <span style="background:#fff2eb;color:#8c491a;font-size:11px;padding:5px 11px;border-radius:999px">Live</span>
+              </div>
+              <div style="display:flex;gap:18px;margin-top:12px">
+                <div><div style="font-size:11px;color:#82796a">Held</div><div style="font-family:'Caprasimo',serif;font-size:17px">KSh 1,750</div></div>
+                <div><div style="font-size:11px;color:#82796a">On the card</div><div style="font-family:'Caprasimo',serif;font-size:17px">KSh {{ cardLoaded }}</div></div>
+                <div><div style="font-size:11px;color:#82796a">Still yours</div><div style="font-family:'Caprasimo',serif;font-size:17px">KSh {{ cardRemaining }}</div></div>
+              </div>
+              <div style="margin-top:12px;font-size:11.5px;color:#82796a">Only approved stalls move from held to the card. Whatever is left comes back when the Qwest closes.</div>
+            </div>
+            <div style="margin-top:18px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a;margin-bottom:6px">Recent</div>
+            <sc-for list="{{ txns }}" as="t" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #e2d5bd">
+                <div style="width:34px;height:34px;border-radius:999px;background:{{ t.dot }};flex:none"></div>
+                <div style="flex:1"><div style="font-size:13.5px">{{ t.label }}</div><div style="font-size:11.5px;color:#82796a">{{ t.when }}</div></div>
+                <div style="font-size:13.5px;font-weight:600">{{ t.amount }}</div>
+              </div>
+            </sc-for>
+            <div style="margin-top:16px;background:#f0fae1;border-radius:26px;padding:16px;font-size:12.5px;color:#56633f">Payouts to runners land on M-Pesa within minutes of approval, or same-day to a bank whose name matches their ID.</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ══ safety report ══ -->
+      <sc-if value="{{ isSafety }}">
+        <div style="flex:1;display:flex;flex-direction:column;animation:sqIn .28s ease">
+          <div style="padding:8px 20px 0;display:flex;align-items:center;gap:12px">
+            <button onClick="{{ goHome }}" style="width:44px;height:44px;border-radius:999px;border:1px solid #dcd3c4;background:#f9f4ed;display:grid;place-items:center;cursor:pointer" style-hover="border-color:#c67139">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#201e1d" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+            </button>
+            <div style="font-size:12px;color:#82796a">Report a problem</div>
+          </div>
+          <div style="padding:16px 20px">
+            <h2 style="font-family:'Caprasimo',serif;font-size:26px;margin:0 0 6px;line-height:1.1">What happened?</h2>
+            <p style="margin:0 0 14px;font-size:13px;color:#645c50">Opening a report freezes the escrow and the Qwest card. The money sits still — it protects you and it protects your runner.</p>
+            <div style="margin:0 0 16px;background:#f0fae1;border-radius:26px;padding:16px">
+              <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#56633f;margin-bottom:6px">Who decides</div>
+              <p style="margin:0;font-size:12.5px;color:#56633f">Side Qwest Legal Operations rules on the case using the evidence the errand already collected: item photos, card charges, receipts, the handover PIN and its location stamp. Their decision releases, splits or refunds the escrow, and it binds both sides.</p>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button style="text-align:left;border:1px solid #dcd3c4;background:#f9f4ed;border-radius:22px;padding:14px 16px;font-size:13.5px;cursor:pointer" style-hover="border-color:#c67139;background:#fff2eb">Items missing or wrong</button>
+              <button style="text-align:left;border:1px solid #dcd3c4;background:#f9f4ed;border-radius:22px;padding:14px 16px;font-size:13.5px;cursor:pointer" style-hover="border-color:#c67139;background:#fff2eb">Basket price looks inflated</button>
+              <button style="text-align:left;border:1px solid #dcd3c4;background:#f9f4ed;border-radius:22px;padding:14px 16px;font-size:13.5px;cursor:pointer" style-hover="border-color:#c67139;background:#fff2eb">Runner never arrived</button>
+              <button style="text-align:left;border:1px solid #dcd3c4;background:#f9f4ed;border-radius:22px;padding:14px 16px;font-size:13.5px;cursor:pointer" style-hover="border-color:#c67139;background:#fff2eb">I felt unsafe</button>
+              <button style="text-align:left;border:1px solid #dcd3c4;background:#f9f4ed;border-radius:22px;padding:14px 16px;font-size:13.5px;cursor:pointer" style-hover="border-color:#c67139;background:#fff2eb">Someone else's account, not mine</button>
+            </div>
+            <div style="margin-top:16px"><textarea placeholder="Tell us in your own words" style="width:100%;min-height:90px;padding:12px 16px;font:inherit;font-size:14px;background:#ebddc5;border:1px solid #dcd3c4;border-radius:22px;color:#201e1d;resize:vertical" style-focus="border-color:#c67139;outline:none"></textarea></div>
+            <button style="width:100%;margin-top:12px;border:0;background:#8c491a;color:#fff2eb;font-family:'Caprasimo',serif;font-size:15px;padding:14px;border-radius:999px;cursor:pointer" style-hover="background:#643312">Open report and freeze escrow</button>
+            <p style="margin:12px 0 0;font-size:11.5px;color:#82796a">Legal Operations answers within 24 hours, and either side can ask for one review. In danger right now? Use SOS on the live Qwest screen — it calls 999 and shares your location and runner's verified identity.</p>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ══ runner feed ══ -->
+      <sc-if value="{{ isRFeed }}">
+        <div style="flex:1;display:flex;flex-direction:column;animation:sqIn .28s ease">
+          <div style="padding:8px 20px 0;display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div style="font-size:12px;color:#82796a">Runner mode · Kileleshwa</div>
+              <div style="font-family:'Caprasimo',serif;font-size:24px;line-height:1.1">Open Qwests</div>
+            </div>
+            <button onClick="{{ toggleRole }}" style="display:flex;align-items:center;gap:7px;border:1px solid #ccdbb2;background:#f0fae1;border-radius:999px;padding:5px 6px 5px 12px;cursor:pointer;font-size:12px;color:#56633f" style-hover="border-color:#7a8a5e">Runner<span style="background:#7a8a5e;color:#f0fae1;border-radius:999px;padding:4px 9px;font-size:11px">Switch</span></button>
+          </div>
+
+          <div style="margin:14px 20px 0;background:#f0fae1;border:1px solid #ccdbb2;border-radius:26px;padding:15px">
+            <div style="display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#56633f">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#56633f" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"></path></svg>
+              Tier 3 · ★ 4.9 · 214 done
+            </div>
+            <div style="font-family:'Caprasimo',serif;font-size:16.5px;margin:7px 0 4px">You can run up to three at once</div>
+            <div style="font-size:12.5px;color:#56633f">Top-rated and fully verified, so you may batch Qwests inside one region on a single trip — and take direct work from people you have run for before.</div>
+          </div>
+
+          <div style="margin:16px 20px 0">
+            <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a;margin-bottom:10px">Your regulars</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <sc-for list="{{ regulars }}" as="r" hint-placeholder-count="2">
+                <div style="background:#ebddc5;border-radius:24px;padding:14px;display:flex;align-items:center;gap:12px">
+                  <div style="width:42px;height:42px;border-radius:999px;background:#dcd3c4;display:grid;place-items:center;font-family:'Caprasimo',serif;font-size:14px;color:#645c50;flex:none">{{ r.initials }}</div>
+                  <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">{{ r.name }}</div><div style="font-size:11.5px;color:#82796a">{{ r.note }} · {{ r.when }}</div></div>
+                  <button onClick="{{ r.accept }}" style="min-height:44px;border:0;background:#7a8a5e;color:#f0fae1;font-family:'Caprasimo',serif;font-size:13px;padding:10px 18px;border-radius:999px;cursor:pointer" style-hover="background:#728157">Take · {{ r.fee }}</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <sc-if value="{{ feedCards }}">
+            <div style="padding:18px 20px 0;display:flex;flex-direction:column;gap:12px">
+              <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#82796a">Open to bid</div>
+              <sc-for list="{{ open }}" as="q" hint-placeholder-count="3">
+                <div style="background:{{ q.pickBg }};border:1px solid {{ q.pickBorder }};border-radius:28px;padding:16px">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+                    <div>
+                      <div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#c67139">{{ q.type }} · {{ q.region }}</div>
+                      <div style="font-family:'Caprasimo',serif;font-size:17px;margin-top:4px">{{ q.title }}</div>
+                    </div>
+                    <span style="background:#f0fae1;color:#56633f;font-size:11px;padding:4px 10px;border-radius:999px;white-space:nowrap">{{ q.dist }}</span>
+                  </div>
+                  <p style="margin:10px 0 0;font-size:12.5px;color:#645c50">{{ q.detail }}</p>
+                  <div style="display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap">
+                    <div style="flex:1;font-size:12px;color:#82796a">Guide fee <strong style="color:#201e1d">{{ q.guide }}</strong></div>
+                    <button onClick="{{ q.toggleBatch }}" style="min-height:44px;border:1px solid #7a8a5e;background:transparent;color:#56633f;font-size:12.5px;padding:10px 15px;border-radius:999px;cursor:pointer" style-hover="background:#e1eecc">{{ q.pickLabel }}</button>
+                    <button onClick="{{ q.bid }}" style="min-height:44px;border:0;background:#7a8a5e;color:#f0fae1;font-family:'Caprasimo',serif;font-size:13px;padding:10px 20px;border-radius:999px;cursor:pointer" style-hover="background:#728157">Place bid</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <sc-if value="{{ batchActive }}">
+            <div style="margin:16px 20px 0;background:#f9f4ed;border:1px solid #7a8a5e;border-radius:26px;padding:16px">
+              <div style="font-family:'Caprasimo',serif;font-size:16.5px;margin-bottom:4px">{{ batchCount }} Qwests in this trip</div>
+              <p style="margin:0 0 12px;font-size:12.5px;color:#645c50">{{ batchNote }}</p>
+              <sc-if value="{{ batchOneRegion }}">
+                <button style="width:100%;min-height:48px;border:0;background:#7a8a5e;color:#f0fae1;font-family:'Caprasimo',serif;font-size:14px;padding:13px;border-radius:999px;cursor:pointer" style-hover="background:#728157">{{ batchCta }}</button>
+              </sc-if>
+              <sc-if value="{{ batchMixed }}">
+                <div style="background:#fff2eb;border-radius:20px;padding:12px;font-size:12.5px;color:#8c491a">Drop the out-of-region Qwest to bid as one trip, or bid on it separately.</div>
+              </sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{ feedList }}">
+            <div style="padding:14px 20px 0">
+              <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:28px;overflow:hidden">
+                <sc-for list="{{ open }}" as="q" hint-placeholder-count="3">
+                  <button onClick="{{ q.bid }}" style="width:100%;text-align:left;border:0;border-bottom:1px solid #ece0ca;background:transparent;padding:14px 16px;cursor:pointer;display:flex;gap:12px;align-items:center" style-hover="background:#f0fae1">
+                    <div style="flex:1;min-width:0">
+                      <div style="font-size:13.5px;font-weight:600">{{ q.title }}</div>
+                      <div style="font-size:11.5px;color:#82796a">{{ q.type }} · {{ q.dist }} · guide {{ q.guide }}</div>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7a8a5e" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"></path></svg>
+                  </button>
+                </sc-for>
+                <div style="padding:12px 16px;font-size:11.5px;color:#82796a">Sorted by distance. Bids are blind — price on your own terms.</div>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="flex:1"></div>
+          <div style="padding:14px 20px 34px;display:flex;gap:10px;align-items:center;justify-content:space-between;font-size:12px;color:#82796a">
+            <span style="display:flex;align-items:center;gap:9px"><span style="width:8px;height:8px;border-radius:999px;background:#7a8a5e"></span>Available until 18:00</span>
+            <button onClick="{{ goRkyc }}" style="min-height:40px;border:1px solid #ccdbb2;background:#f0fae1;color:#56633f;font-size:12px;padding:9px 15px;border-radius:999px;cursor:pointer" style-hover="background:#e1eecc">Runner checks</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ══ runner: place bid ══ -->
+      <sc-if value="{{ isRBid }}">
+        <div style="flex:1;display:flex;flex-direction:column;animation:sqIn .28s ease">
+          <div style="padding:8px 20px 0;display:flex;align-items:center;gap:12px">
+            <button onClick="{{ goRunner }}" style="width:44px;height:44px;border-radius:999px;border:1px solid #dcd3c4;background:#f9f4ed;display:grid;place-items:center;cursor:pointer" style-hover="border-color:#7a8a5e">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#201e1d" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"></path></svg>
+            </button>
+            <div style="font-size:12px;color:#82796a">Your bid</div>
+          </div>
+          <div style="padding:16px 20px">
+            <div style="background:#ebddc5;border-radius:28px;padding:16px">
+              <div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:#8c491a">Market run</div>
+              <div style="font-family:'Caprasimo',serif;font-size:19px;margin:4px 0 6px">Sukuma, tomatoes and 2kg unga from Toi</div>
+              <div style="font-size:12.5px;color:#645c50">Toi Market → Kileleshwa · 1.8 km · guide KSh 250–450</div>
+            </div>
+            <div style="margin-top:18px">
+              <label style="display:block;font-size:12px;color:#645c50;margin-bottom:6px">Your fee</label>
+              <div style="display:flex;align-items:center;gap:10px;background:#f9f4ed;border:1px solid #dcd3c4;border-radius:999px;padding:8px 20px">
+                <span style="font-family:'Caprasimo',serif;font-size:18px;color:#82796a">KSh</span>
+                <input value="350" style="flex:1;border:0;background:transparent;font-family:'Caprasimo',serif;font-size:26px;color:#201e1d;min-width:0" style-focus="outline:none">
+              </div>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <span style="background:#ebddc5;color:#645c50;font-size:11.5px;padding:6px 12px;border-radius:999px">You keep KSh 315</span>
+                <span style="background:#ebddc5;color:#645c50;font-size:11.5px;padding:6px 12px;border-radius:999px">10% platform</span>
+              </div>
+            </div>
+            <div style="margin-top:16px"><label style="display:block;font-size:12px;color:#645c50;margin-bottom:5px">A line to Amina</label><textarea style="width:100%;min-height:80px;padding:12px 16px;font:inherit;font-size:14px;background:#ebddc5;border:1px solid #dcd3c4;border-radius:22px;color:#201e1d;resize:vertical" style-focus="border-color:#7a8a5e;outline:none">I shop Toi most mornings, I know the good tomato stalls. Can drop by 12:30.</textarea></div>
+            <div style="margin-top:16px;background:#f0fae1;border-radius:26px;padding:16px;font-size:12.5px;color:#56633f">You never spend your own money. Once Amina approves the basket, Side Qwest pays the stalls and your fee at the same moment.</div>
+            <button onClick="{{ submitBid }}" style="width:100%;margin-top:16px;border:0;background:#7a8a5e;color:#f0fae1;font-family:'Caprasimo',serif;font-size:15px;padding:14px;border-radius:999px;cursor:pointer" style-hover="background:#728157">{{ bidCta }}</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ sos }}">
+        <div style="position:fixed;inset:0;z-index:80;background:rgba(46,43,37,.55);display:grid;place-items:end center;padding:20px">
+          <div style="width:100%;background:#f9f4ed;border-radius:34px;padding:22px 20px;box-shadow:0 12px 32px rgba(46,43,37,.3)">
+            <div style="font-family:'Caprasimo',serif;font-size:22px;margin-bottom:4px">Need help now?</div>
+            <p style="margin:0 0 14px;font-size:12.5px;color:#645c50">We'll share your live location, the runner's verified identity and this errand's record.</p>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button style="border:0;background:#8c491a;color:#fff2eb;font-family:'Caprasimo',serif;font-size:14.5px;padding:13px;border-radius:999px;cursor:pointer" style-hover="background:#643312">Call 999 and alert Side Qwest</button>
+              <button style="border:1px solid #dcd3c4;background:transparent;color:#201e1d;font-size:13px;padding:13px;border-radius:999px;cursor:pointer" style-hover="background:#ebddc5">Share live location with Wanjiku</button>
+              <button onClick="{{ closeSos }}" style="border:0;background:transparent;color:#645c50;font-size:13px;padding:10px;cursor:pointer">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </x-import>
+
+  <p style="max-width:920px;margin:0;font-size:12px;color:#645c50">Money is a one-time card issued per errand and voided when it closes. Release depends on the errand type: on market runs the runner photographs every item at a stall and sends it, the requester approves, and only then does the card load that stall's total; shop pickups release on a receipt that matches the card charge; deliveries and document drops release when the requester confirms the handover scan. Switch errand type on the post screen, or in Tweaks, to see all three. Grey striped blocks are placeholders for map tiles, ID captures and receipt photos.</p>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1000,&quot;height&quot;:1080},&quot;errandType&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Market run&quot;,&quot;Shop pickup&quot;,&quot;Queue standing&quot;,&quot;Document drop-off&quot;],&quot;default&quot;:&quot;Market run&quot;,&quot;tsType&quot;:&quot;'Market run' | 'Shop pickup' | 'Queue standing' | 'Document drop-off'&quot;,&quot;section&quot;:&quot;Payments&quot;},&quot;feedLayout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;cards&quot;,&quot;list&quot;],&quot;default&quot;:&quot;cards&quot;,&quot;tsType&quot;:&quot;'cards' | 'list'&quot;,&quot;section&quot;:&quot;Variants&quot;},&quot;kycStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;stepper&quot;,&quot;rings&quot;],&quot;default&quot;:&quot;stepper&quot;,&quot;tsType&quot;:&quot;'stepper' | 'rings'&quot;,&quot;section&quot;:&quot;Variants&quot;},&quot;bidStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;cards&quot;,&quot;compare&quot;],&quot;default&quot;:&quot;cards&quot;,&quot;tsType&quot;:&quot;'cards' | 'compare'&quot;,&quot;section&quot;:&quot;Variants&quot;},&quot;trackStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;map&quot;,&quot;timeline&quot;],&quot;default&quot;:&quot;map&quot;,&quot;tsType&quot;:&quot;'map' | 'timeline'&quot;,&quot;section&quot;:&quot;Variants&quot;},&quot;startVerified&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;State&quot;}}">
+class Component extends DCLogic {
+  state = {
+    screen: 'home', role: 'requester', kycStep: 1, sos: false, bidSent: false, dropDone: false, receipt: 'pending',
+    type: 'Market run',
+    lang: 'en', declineSeen: false, declineMode: null, bidsLoading: false, batch: [],
+    deadline: '2 hours', bonus: true, remaining: 4335,
+    vendors: [
+      { id: 'v1', name: 'Mama Njeri · greens', state: 'shopping', items: [
+        { label: 'Sukuma wiki × 3', price: 90, photo: 'ok', fails: 0 },
+        { label: 'Tomatoes 1 kg', price: 150, photo: 'none', fails: 0, trick: 'reject' },
+      ] },
+      { id: 'v2', name: 'Kimani cereals', state: 'shopping', items: [
+        { label: 'Kasuku unga 2 kg', price: 340, photo: 'none', fails: 0, trick: 'stock' },
+      ] },
+      { id: 'v3', name: 'Boda · Toi → Kileleshwa', state: 'shopping', items: [
+        { label: 'Transport', price: 260, photo: 'none', fails: 0 },
+      ] },
+    ],
+    messages: [
+      { from: 'them', text: 'On my way to Toi now. Anything else while I am there?' },
+      { from: 'me', text: 'Just the three, asante. Gate 4, ask for Amina.' },
+      { from: 'them', text: 'Kasuku unga is finished. Jogoo is KSh 355 — shall I take it?' },
+    ],
+  };
+
+  componentWillUnmount() { clearInterval(this._tick); }
+
+  componentDidMount() {
+    this._tick = setInterval(() => this.setState(p => ({ remaining: Math.max(0, p.remaining - 1) })), 1000);
+    const patch = {};
+    if (this.props.startVerified) patch.verified = true;
+    if (this.props.errandType) patch.type = this.props.errandType;
+    if (Object.keys(patch).length) this.setState(patch);
+  }
+
+  patchItem(vid, idx, patch) {
+    this.setState(p => ({ vendors: p.vendors.map(v => v.id !== vid ? v : { ...v, items: v.items.map((it, i) => i === idx ? { ...it, ...patch } : it) }) }));
+  }
+
+  patchVendor(vid, patch) {
+    this.setState(p => ({ vendors: p.vendors.map(v => v.id === vid ? { ...v, ...patch } : v) }));
+  }
+
+  shoot(vid, idx, it) {
+    if (it.photo === 'escalated' || it.subState === 'pending') return;
+    if (it.trick === 'reject' && it.fails === 0) return this.patchItem(vid, idx, { photo: 'rejected', fails: 1 });
+    if (it.photo === 'rejected') return this.patchItem(vid, idx, { photo: 'escalated', fails: 2 });
+    this.patchItem(vid, idx, { photo: it.photo === 'ok' ? 'none' : 'ok' });
+  }
+
+  proposeSub(vid, idx) { this.patchItem(vid, idx, { subState: 'pending', subLabel: 'Jogoo unga 2 kg', subPrice: 355 }); }
+  settleSub(vid, idx, accept) {
+    const patch = accept ? { subState: 'accepted', photo: 'ok', label: 'Jogoo unga 2 kg (substitute)', price: 355 } : { subState: 'declined', photo: 'ok', price: 0, label: 'Kasuku unga — dropped, refunded' };
+    this.patchItem(vid, idx, patch);
+  }
+  overridePhoto(vid, idx) { this.patchItem(vid, idx, { photo: 'ok', overridden: true }); }
+
+  send(vid) { this.patchVendor(vid, { state: 'pending' }); }
+  approve(vid) { this.patchVendor(vid, { state: 'approved' }); }
+  pay(vid) {
+    if (vid === 'v2' && !this.state.declineSeen) { this.setState({ declineSeen: true }); return this.patchVendor(vid, { state: 'declined' }); }
+    this.patchVendor(vid, { state: 'paid' });
+  }
+  resolveDecline(mode) { this.setState({ declineMode: mode }); this.patchVendor('v2', { state: 'paid', paidVia: mode }); }
+
+  get verified() { return this.state.verified ?? !!this.props.startVerified; }
+
+  go(screen) { return () => this.setState({ screen, sos: false }); }
+
+  renderVals() {
+    const s = this.state;
+    const step = s.kycStep;
+    const bids = [
+      { initials: 'GN', name: 'Grace Njeri', first: 'Grace', rating: '4.9', jobs: 214, dist: '900 m', fee: '350', eta: 'Drops by 12:30', note: 'I shop Toi most mornings, I know the good tomato stalls.' },
+      { initials: 'PK', name: 'Peter Kimani', first: 'Peter', rating: '4.7', jobs: 68, dist: '1.4 km', fee: '300', eta: 'Drops by 13:15', note: 'Free after my school run. Happy to weigh the unga in front of you.' },
+      { initials: 'FA', name: 'Faith Achieng', first: 'Faith', rating: '5.0', jobs: 31, dist: '2.2 km', fee: '420', eta: 'Drops by 12:10', note: 'Fastest of the three — I have a boda waiting.' },
+    ].map(b => ({ ...b, choose: () => this.setState({ screen: 'track', basketOpen: false, approved: false }) }));
+
+    const batch = s.batch || [];
+    const open = [
+      { id: 'q1', type: 'Market run', title: 'Sukuma, tomatoes and 2kg unga', detail: 'Toi Market → Kileleshwa. Firm tomatoes, Kasuku unga if stocked.', dist: '1.8 km', guide: 'KSh 250–450', region: 'Toi · Kileleshwa', fee: 350 },
+      { id: 'q2', type: 'Shop pickup', title: 'Pharmacy run, Kileleshwa Ridge', detail: 'Prescription in my name, ID at the counter. Naivas plaza chemist.', dist: '2.1 km', guide: 'KSh 200–350', region: 'Toi · Kileleshwa', fee: 250 },
+      { id: 'q3', type: 'Document drop-off', title: 'Signed lease to Westlands office', detail: 'Sealed envelope, code handover to the receptionist.', dist: '3.3 km', guide: 'KSh 300–500', region: 'Westlands', fee: 400 },
+    ].map(q => ({
+      ...q,
+      bid: () => this.setState({ screen: 'rbid', bidSent: false }),
+      picked: batch.includes(q.id),
+      pickBg: batch.includes(q.id) ? '#f0fae1' : '#f9f4ed',
+      pickBorder: batch.includes(q.id) ? '#7a8a5e' : '#dcd3c4',
+      pickLabel: batch.includes(q.id) ? 'In this trip' : 'Add to trip',
+      toggleBatch: () => this.setState(p => ({ batch: (p.batch || []).includes(q.id) ? p.batch.filter(x => x !== q.id) : [...(p.batch || []), q.id] })),
+    }));
+    const batched = open.filter(q => q.picked);
+    const batchRegions = new Set(batched.map(q => q.region));
+    const regulars = [
+      { initials: 'AO', name: 'Amina O.', note: 'Toi market run, most Saturdays', fee: 'KSh 350', when: 'Invited you directly' },
+      { initials: 'JM', name: 'Joseph M.', note: 'NTSA queue, third time', fee: 'KSh 750', when: 'Standing arrangement' },
+    ].map(r => ({ ...r, accept: () => this.setState({ screen: 'rbid', bidSent: false }) }));
+
+    const chip = (t) => (s.type === t ? '#c67139' : 'transparent');
+    const chipFg = (t) => (s.type === t ? '#f5ead8' : '#201e1d');
+    const kycStyle = this.props.kycStyle ?? 'stepper';
+    const feedLayout = this.props.feedLayout ?? 'cards';
+    const bidStyle = this.props.bidStyle ?? 'cards';
+    const trackStyle = this.props.trackStyle ?? 'map';
+
+    const fmt = n => n.toLocaleString('en-KE');
+    const modeMarket = s.type === 'Market run';
+    const modeShop = s.type === 'Shop pickup';
+    const modeConfirm = !modeMarket && !modeShop;
+    const fee = 350, goodsCap = 1400;
+    const statusMap = {
+      shopping: ['Shopping', '#ebddc5', '#82796a'], pending: ['Awaiting Amina', '#fff2eb', '#8c491a'],
+      approved: ['Approved · pay now', '#f0fae1', '#56633f'], declined: ['Card declined', '#ffe1d0', '#8c491a'],
+      paid: ['Paid', '#f0fae1', '#56633f'],
+    };
+    const vendors = s.vendors.map(v => {
+      const subtotal = v.items.reduce((a, it) => a + it.price, 0);
+      const done = v.items.filter(it => it.photo === 'ok').length;
+      const blocked = v.items.some(it => it.photo !== 'ok');
+      const st = statusMap[v.state] || statusMap.shopping;
+      return {
+        ...v, subtotal: fmt(subtotal),
+        shotLabel: done + '/' + v.items.length + ' evidenced',
+        canSend: v.state === 'shopping' && !blocked,
+        stillShopping: v.state === 'shopping' && blocked,
+        awaiting: v.state === 'pending',
+        canPay: v.state === 'approved',
+        declined: v.state === 'declined',
+        paid: v.state === 'paid',
+        paidNote: v.paidVia === 'till' ? 'Paid by M-Pesa till from the card balance' : v.paidVia === 'requester' ? 'Amina paid the till directly — escrow reimburses her at close' : 'Paid with the Qwest card',
+        sendLabel: 'Send KSh ' + fmt(subtotal) + ' for approval',
+        approveLabel: 'Approve KSh ' + fmt(subtotal),
+        payLabel: 'Pay KSh ' + fmt(subtotal) + ' at the stall',
+        statusLabel: st[0], statusBg: st[1], statusFg: st[2],
+        send: () => this.send(v.id), approve: () => this.approve(v.id), pay: () => this.pay(v.id),
+        items: v.items.map((it, i) => ({
+          ...it, priceLabel: fmt(it.price),
+          ok: it.photo === 'ok', rejected: it.photo === 'rejected', escalated: it.photo === 'escalated',
+          subPending: it.subState === 'pending',
+          canPropose: it.trick === 'stock' && it.photo !== 'ok' && !it.subState,
+          subLine: it.subLabel ? it.subLabel + ' · KSh ' + fmt(it.subPrice || 0) : '',
+          shotBg: it.photo === 'ok' ? '#7a8a5e' : it.photo === 'rejected' || it.photo === 'escalated' ? '#8c491a' : 'transparent',
+          shotBorder: it.photo === 'ok' ? '#7a8a5e' : it.photo === 'none' ? '#c0b6a5' : '#8c491a',
+          shotLabel: it.photo === 'ok' ? (it.overridden ? 'approved by Amina' : 'photo accepted') : it.photo === 'rejected' ? 'too blurred — retake' : it.photo === 'escalated' ? 'sent to Amina to decide' : it.subState === 'pending' ? 'waiting on Amina' : 'tap to photograph',
+          toggle: () => this.shoot(v.id, i, it),
+          propose: () => this.proposeSub(v.id, i),
+          accept: () => this.settleSub(v.id, i, true),
+          decline: () => this.settleSub(v.id, i, false),
+          override: () => this.overridePhoto(v.id, i),
+        })),
+      };
+    });
+    const legTotal = v => v.items.reduce((b, it) => b + it.price, 0);
+    const released = s.vendors.filter(v => v.state === 'paid' && v.paidVia !== 'requester').reduce((a, v) => a + legTotal(v), 0);
+    const reqSettled = s.vendors.filter(v => v.state === 'paid' && v.paidVia === 'requester').reduce((a, v) => a + legTotal(v), 0);
+    const unlockedCount = s.vendors.filter(v => v.state === 'paid').length;
+    const pendingStalls = vendors.filter(v => v.awaiting);
+    const exceptions = [];
+    vendors.forEach(v => v.items.forEach(it => {
+      if (it.escalated) exceptions.push({ ...it, vendor: v.name, kind: 'photo', ask: 'Photo rejected twice — approve this line anyway?' });
+      if (it.subPending) exceptions.push({ ...it, vendor: v.name, kind: 'sub', ask: 'Out of stock. Runner proposes ' + it.subLine });
+    }));
+
+    return {
+      isHome: s.screen === 'home', isPost: s.screen === 'post', isBids: s.screen === 'bids',
+      isTrack: s.screen === 'track', isWallet: s.screen === 'wallet', isSafety: s.screen === 'safety',
+      isRFeed: s.screen === 'rfeed', isRBid: s.screen === 'rbid',
+      inKyc: s.screen === 'kyc', isKyc1: s.screen === 'kyc' && step === 1, isKyc2: s.screen === 'kyc' && step === 2,
+      isKyc3: s.screen === 'kyc' && step === 3, isKycDone: s.screen === 'kyc' && step === 4,
+      verified: this.verified, unverified: !this.verified,
+
+      goHome: this.go('home'), goPost: this.go('post'), goTrack: this.go('track'),
+      goBids: () => { this.setState({ screen: 'bids', sos: false, bidsLoading: true }); setTimeout(() => this.setState({ bidsLoading: false }), 900); },
+      goWallet: this.go('wallet'), goSafety: this.go('safety'), goRunner: () => this.setState({ screen: 'rfeed', role: 'runner', sos: false }),
+      goKyc: () => this.setState({ screen: 'kyc', kycStep: 1 }),
+      toggleRole: () => this.setState(p => p.role === 'requester' ? { role: 'runner', screen: 'rfeed' } : { role: 'requester', screen: 'home' }),
+      kycNext: () => step === 4 ? this.setState({ screen: 'home', verified: true }) : this.setState({ kycStep: step + 1 }),
+      kycBack: () => step === 1 ? this.setState({ screen: 'home' }) : this.setState({ kycStep: step - 1 }),
+      kycCta: step === 3 ? 'Submit for verification' : step === 4 ? 'Back to Side Qwest' : 'Continue',
+      stepLabel: step > 3 ? 'Done' : 'Step ' + step + ' of 3',
+      stepNum: step > 3 ? '✓' : String(step),
+      stepName: ['Identity', 'Documents', 'Address & payout', 'Verified'][Math.min(step, 4) - 1],
+      bar2: step >= 2 ? '#c67139' : '#dcd3c4',
+      bar3: step >= 3 ? '#c67139' : '#dcd3c4',
+      ringBg: 'conic-gradient(#c67139 ' + Math.min(step, 3) * 33.4 + '%, #dcd3c4 0)',
+      kycStepper: kycStyle === 'stepper', kycRings: kycStyle === 'rings',
+
+      pickMarket: () => this.setState({ type: 'Market run' }), pickShop: () => this.setState({ type: 'Shop pickup' }),
+      pickQueue: () => this.setState({ type: 'Queue standing' }), pickDoc: () => this.setState({ type: 'Document drop-off' }),
+      chipMarket: chip('Market run'), chipMarketFg: chipFg('Market run'),
+      chipShop: chip('Shop pickup'), chipShopFg: chipFg('Shop pickup'),
+      chipQueue: chip('Queue standing'), chipQueueFg: chipFg('Queue standing'),
+      chipDoc: chip('Document drop-off'), chipDocFg: chipFg('Document drop-off'),
+      submitPost: () => { this.setState({ screen: 'bids', bidsLoading: true }); setTimeout(() => this.setState({ bidsLoading: false }), 900); },
+
+      bids, open, regulars,
+      bidCards: bidStyle === 'cards' && !s.bidsLoading, bidCompare: bidStyle === 'compare' && !s.bidsLoading,
+      batchCount: batched.length,
+      batchActive: batched.length > 1,
+      batchOneRegion: batched.length > 1 && batchRegions.size === 1,
+      batchMixed: batched.length > 1 && batchRegions.size > 1,
+      batchCta: 'Bid on ' + batched.length + ' Qwests as one trip · KSh ' + batched.reduce((a, q) => a + q.fee, 0),
+      batchNote: batched.length > 1 && batchRegions.size > 1 ? 'Westlands is a different region — batching only covers Qwests inside one region.' : 'Each Qwest keeps its own card, its own approvals and its own escrow. One trip, three sets of money that never touch.',
+      feedCards: feedLayout === 'cards', feedList: feedLayout === 'list',
+      trackMap: trackStyle === 'map', trackTimeline: trackStyle === 'timeline',
+
+      isCard: s.screen === 'card', goCard: this.go('card'),
+      modeMarket, modeShop, modeConfirm,
+      modeName: modeMarket ? 'Photo release, stall by stall' : modeShop ? 'Receipt release' : 'Requester release',
+      moneyBody: modeMarket
+        ? 'Your runner carries a one-time Side Qwest card, loaded only for this errand. They photograph every item at each stall and send it to you; the card loads that stall\u2019s total once you approve it, and nothing more.'
+        : modeShop
+          ? 'Your runner pays with a one-time Side Qwest card loaded for this errand. The till receipt is matched to the card charge and funds release straight away — no approval needed from you.'
+          : 'No goods to buy on this Qwest, so the card only carries the fee. It cashes out when you confirm the handover PIN. The card voids the moment the errand closes.',
+      vendors, pendingStalls, exceptions,
+      hasPending: pendingStalls.length > 0, hasExceptions: exceptions.length > 0,
+      noPending: pendingStalls.length === 0 && exceptions.length === 0,
+      releasedTotal: fmt(released),
+      cardCap: fmt(goodsCap + fee),
+      cardLoaded: fmt(released + (modeConfirm ? fee : 0)),
+      cardRemaining: fmt(goodsCap + fee - released - reqSettled),
+      reqSettled: fmt(reqSettled), hasReqSettled: reqSettled > 0,
+      legsLabel: unlockedCount + ' of ' + vendors.length + ' stalls paid',
+      declineActive: s.vendors.some(v => v.state === 'declined'),
+      resolveTill: () => this.resolveDecline('till'),
+      resolveRequester: () => this.resolveDecline('requester'),
+      declineNote: s.declineMode === 'till' ? 'Settled by M-Pesa till from the card balance.' : s.declineMode === 'requester' ? 'Amina paid the till directly. Escrow reimburses her when the Qwest closes.' : '',
+
+      isChat: s.screen === 'chat', goChat: this.go('chat'),
+      messages: s.messages.map(m => ({
+        text: m.text, mine: m.from === 'me',
+        align: m.from === 'me' ? 'flex-end' : 'flex-start',
+        bg: m.from === 'me' ? '#c67139' : '#f9f4ed',
+        fg: m.from === 'me' ? '#fff2eb' : '#201e1d',
+        who: m.from === 'me' ? 'You' : 'Grace',
+      })),
+      sendYes: () => this.setState(p => ({ messages: [...p.messages, { from: 'me', text: 'Yes, take the Jogoo. Photograph it and send the stall.' }] })),
+      sendWait: () => this.setState(p => ({ messages: [...p.messages, { from: 'me', text: 'Skip it, I will get unga later.' }] })),
+
+      isRkyc: s.screen === 'rkyc', goRkyc: this.go('rkyc'),
+
+      deadline: s.deadline, bonusOn: s.bonus, bonusOff: !s.bonus,
+      toggleBonus: () => this.setState(p => ({ bonus: !p.bonus })),
+      setD30: () => this.setState({ deadline: '30 minutes', remaining: 1800 }),
+      setD1: () => this.setState({ deadline: '1 hour', remaining: 3600 }),
+      setD2: () => this.setState({ deadline: '2 hours', remaining: 7200 }),
+      setDEve: () => this.setState({ deadline: 'By 6pm', remaining: 19800 }),
+      dChip30: s.deadline === '30 minutes' ? '#c67139' : 'transparent', dFg30: s.deadline === '30 minutes' ? '#f5ead8' : '#201e1d',
+      dChip1: s.deadline === '1 hour' ? '#c67139' : 'transparent', dFg1: s.deadline === '1 hour' ? '#f5ead8' : '#201e1d',
+      dChip2: s.deadline === '2 hours' ? '#c67139' : 'transparent', dFg2: s.deadline === '2 hours' ? '#f5ead8' : '#201e1d',
+      dChipEve: s.deadline === 'By 6pm' ? '#c67139' : 'transparent', dFgEve: s.deadline === 'By 6pm' ? '#f5ead8' : '#201e1d',
+      clock: Math.floor(s.remaining / 3600) + 'h ' + String(Math.floor((s.remaining % 3600) / 60)).padStart(2, '0') + 'm ' + String(s.remaining % 60).padStart(2, '0') + 's',
+      clockShort: Math.floor(s.remaining / 60) + ' min left',
+      clockBg: s.remaining < 900 ? '#ffe1d0' : '#f0fae1',
+      clockFg: s.remaining < 900 ? '#8c491a' : '#56633f',
+      bonusLabel: s.bonus ? 'On-time bonus KSh 50' : 'No bonus',
+
+      langEn: s.lang === 'en', langSw: s.lang === 'sw',
+      toggleLang: () => this.setState(p => ({ lang: p.lang === 'en' ? 'sw' : 'en' })),
+      langLabel: s.lang === 'en' ? 'SW' : 'EN',
+      tHello: s.lang === 'en' ? 'Karibu back,' : 'Karibu tena,',
+      tStart: s.lang === 'en' ? 'Start something' : 'Anza kazi',
+      tCardKicker: s.lang === 'en' ? 'Photograph, then pay' : 'Piga picha, kisha lipa',
+      tCardBody: s.lang === 'en' ? 'Every item needs a photo. Send the stall to Amina, and the card loads that stall\u2019s total once she approves.' : 'Kila kitu kinahitaji picha. Tuma kibanda kwa Amina, kadi itapakia jumla ya kibanda hicho baada ya idhini yake.',
+      tTrackTitle: s.lang === 'en' ? 'Stalls waiting on you' : 'Vibanda vinakusubiri',
+      bidsLoading: s.bidsLoading, bidsReady: !s.bidsLoading,
+      receiptMatched: s.receipt === 'matched',
+      receiptPending: s.receipt !== 'matched',
+      matchReceipt: () => this.setState({ receipt: 'matched' }),
+      dropDone: s.dropDone,
+      dropPending: !s.dropDone,
+      confirmDrop: () => this.setState({ dropDone: true }),
+      dropCta: s.dropDone ? 'Released · KSh 350 on its way' : 'Confirm handover and release KSh 350',
+      progressLabel: modeMarket ? 'Released so far KSh ' + fmt(released) + ' of ' + fmt(goodsCap) + ' cap' : '',
+      txns: [
+        { label: 'Escrow held · Toi market run', when: 'Today 11:06', amount: '−1,190', dot: '#ffc6a5' },
+        { label: 'Top up from M-Pesa', when: 'Today 09:12', amount: '+5,000', dot: '#ccdbb2' },
+        { label: 'Queue standing · NTSA', when: 'Mon', amount: '−750', dot: '#dcd3c4' },
+        { label: 'Refund · runner cancelled', when: 'Last week', amount: '+400', dot: '#ccdbb2' },
+      ],
+
+      sos: s.sos, openSos: () => this.setState({ sos: true }), closeSos: () => this.setState({ sos: false }),
+      submitBid: () => this.setState({ bidSent: true }),
+      bidCta: s.bidSent ? 'Bid sent — Amina will see it blind' : 'Send blind bid',
+    };
+  }
+}
+</script>
+</body>
+</html>

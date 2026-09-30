@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="_ds/organic-4f4473c1-637a-4031-9a06-57d81f0f6a6a/styles.css">
+<script src="_ds/organic-4f4473c1-637a-4031-9a06-57d81f0f6a6a/_ds_bundle.js"></script>
+<script src="./doc-page.js"></script>
+<style>
+doc-page:not(:defined){visibility:hidden}
+body{margin:0;font-family:"Figtree",system-ui,sans-serif;color:#201e1d}
+a{color:#8c491a}a:hover{color:#643312}
+</style>
+</helmet>
+<doc-page margin="0.8in">
+  <div slot="header" style="display:flex;justify-content:space-between;align-items:baseline;font-size:10px;color:#82796a;padding-bottom:6px;border-bottom:1px solid #dcd3c4">
+    <span>Side Qwest · platform architecture</span><span>Restricted — system administrator only · v0.1 · Nairobi pilot</span>
+  </div>
+
+  <h1 style="font-family:'Caprasimo',serif;font-size:38px;line-height:1.08;margin:0 0 10px;letter-spacing:-.015em">Re-engineering ride-hailing for errands</h1>
+  <p style="font-size:15px;line-height:1.6;color:#3b3730;margin:0 0 6px">Side Qwest borrows ride-hailing's spine — verified supply, geospatial matching, escrowed money, a live job state machine — and changes the three things that make errands a different business: the job is <strong>a shopping mandate, not a ride</strong>, the price is <strong>bid, not metered</strong>, and the platform, not the runner, <strong>pays the merchant</strong>.</p>
+  <p style="font-size:15px;line-height:1.6;color:#3b3730;margin:0 0 22px">Spend authority is not a wallet debit but a <strong>one-time virtual card issued per errand</strong>, loaded in tranches as proof arrives and voided when the errand closes. What counts as proof depends on the errand type. Escrow sits behind the card and protects both sides: while money is frozen, neither party can be stranded, and contested cases are decided by Legal Operations on the evidence the errand already collected. This document specifies the services, data model, matching logic and payment rails for the Nairobi pilot. Money is KSh, settlement runs over M-Pesa (Daraja), and identity is gated: an unverified account can browse and nothing else.</p>
+
+  <h2 style="font-family:'Caprasimo',serif;font-size:24px;margin:26px 0 8px">1. What changes from a ride-hailing stack</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin:0 0 8px">
+    <thead><tr>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Ride-hailing</th>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Side Qwest</th>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Consequence</th>
+    </tr></thead>
+    <tbody>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Auto-dispatch, driver accepts or declines</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Shortlist auto-notified, runners submit blind bids, requester picks</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Dispatch becomes an auction with a deadline; no lock-and-assign path</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Fare metered from distance and time</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Fee named by the runner, plus a variable goods cost</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Two money legs per job: fee and basket. Authorisation must cover an unknown basket</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Trip = A → B, one participant pair</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Errand = mandate with an itemised basket and a handover</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Job state machine gains basket, approval and handover states</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Driver fronts fuel; platform settles later</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Runner spends a one-time card issued for that errand and voided at close</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Card issuing is a core service; spend authority is scoped, tranched and expiring</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Disputes are fare adjustments settled by support scripts</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Disputes concern goods and money already spent; Legal Operations rules on frozen escrow</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Every release path must leave court-grade evidence behind it</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Supply verified once, at driver signup</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Both sides verified before either can transact</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">KYC is an entitlement service every write path consults</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Continuous GPS is the product</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Location matters at pickup, purchase and handover</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Event-driven tracking; far lighter telemetry, cheaper on data</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:12px;color:#645c50;margin:0 0 4px">Table 1 — the four ride-hailing assumptions that do not survive contact with errands.</p>
+
+  <h2 style="font-family:'Caprasimo',serif;font-size:24px;margin:26px 0 8px">2. Service map</h2>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 12px">Thirteen services behind a single API gateway. Anything a user waits on is synchronous; anything with money or a third party in it is a durable, idempotent workflow driven off an event bus (Kafka topics named <code style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:#f0eadc;padding:1px 5px;border-radius:4px">errand.*</code>, <code style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:#f0eadc;padding:1px 5px;border-radius:4px">payment.*</code>, <code style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:#f0eadc;padding:1px 5px;border-radius:4px">identity.*</code>).</p>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin:0 0 8px">
+    <thead><tr>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Service</th>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Owns</th>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Store</th>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Notes</th>
+    </tr></thead>
+    <tbody>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>identity</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Accounts, sessions, devices</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Postgres</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Phone-first auth; one account, two roles</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>kyc</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Verification cases, tiers, entitlements</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Postgres + encrypted blob store</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Wraps the ID/liveness vendor; raw documents never leave it</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>errand</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Requests, mandates, state machine</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Postgres</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Source of truth for job status; emits every transition</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>auction</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Bids, bid windows, awards</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Postgres + Redis timers</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Bids sealed until award or window close</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>matching</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Shortlists, runner availability, ranking</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Redis geo + read replica</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Stateless scorer; no assignment authority</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>basket</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Line items, item photos, vendor legs, receipts</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Postgres + object store</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Owns the proof; emits release requests, never moves money itself</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>card</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">One-time cards, tranche loads, voids</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Postgres + issuer tokens</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Issuer adapter; MCC and merchant scoping, hard expiry on errand close</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>payments</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Escrow funding, releases, payouts, refunds</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Postgres</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Daraja adapter; every call idempotency-keyed</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>ledger</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Double-entry accounts and postings</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Postgres, append-only</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">No updates, no deletes; balances are derived</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>tracking</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Location pings, milestones, PINs</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Redis + short-TTL timeseries</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Retains 24h, then only milestones</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>trust &amp; safety</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Reports, SOS, holds, evidence packs</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Postgres</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Freezes escrow and the card; assembles the pack Legal Ops rules on</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>legal ops</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Dispute cases, rulings, remedies</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Postgres, append-only rulings</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">The only service that can split or reverse a frozen escrow</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>notify</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Push, SMS, USSD fallback</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Redis queues</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">SMS is the floor: the pilot assumes patchy data</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:12px;color:#645c50;margin:0 0 4px">Table 2 — service responsibilities. The companion diagram shows call direction and the external rails.</p>
+
+  <h2 style="font-family:'Caprasimo',serif;font-size:24px;margin:26px 0 8px">3. Data model</h2>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 12px">Nine core entities. Personally identifying verification data lives only in <em>kyc_case</em>; every other service reads a derived <em>verification tier</em> and a public profile.</p>
+  <div style="break-inside:avoid;background:#f7f1e5;border-radius:16px;padding:16px 18px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.75;color:#3b3730;margin:0 0 8px;white-space:pre-wrap">user(id, phone_e164, first_name, display_photo_url, role_flags, tier, rating_avg, jobs_done, created_at)
+kyc_case(id, user_id, tier_requested, id_number_hash, dob, doc_front_ref, doc_back_ref,
+         liveness_score, address_ref, payout_name, name_match_score, state, decided_at, recheck_due)
+errand(id, requester_id, type, title, notes, pickup_geo, dropoff_geo, guide_fee_min, guide_fee_max,
+       spend_cap, deadline_at?, on_time_bonus?, region_id, batch_id?, state, runner_id?, awarded_bid_id?, created_at)
+bid(id, errand_id, runner_id, fee_amount, message, eta_minutes, state, sealed_until, created_at)
+basket(id, errand_id, release_mode[item_photo|receipt|requester_confirm], state,
+       goods_total, fee_amount, platform_fee, receipt_ref, closed_at)
+vendor_leg(id, basket_id, vendor_label, vendor_till?, subtotal,
+           state[shopping|pending|approved|paid|declined], approved_by, paid_via[card|till|requester], paid_at)
+basket_item(id, basket_id, vendor_leg_id, label, qty, unit_price, amount, photo_ref, photo_score,
+            photo_state[none|ok|rejected|escalated], fails, override_by?, sub_of?, added_at)
+card(id, errand_id, runner_id, issuer_token, pan_last4, cap_amount, loaded_amount,
+     mcc_allowlist, state[issued|active|voided], expires_at, voided_reason?)
+card_load(id, card_id, trigger[vendor_leg|fee|topup], amount, evidence_ref, created_at)
+payment(id, errand_id, kind[escrow_fund|card_load|settlement|payout|refund], rail, external_ref, amount, state, idem_key)
+ledger_entry(id, posting_id, account, direction[dr|cr], amount, currency, errand_id?, created_at)
+handover(id, errand_id, qr_token_hash, scanned_at, scanned_geo, scanned_by)
+batch(id, runner_id, region_id, errand_ids[], created_at)
+relationship(id, requester_id, runner_id, errands_done, direct_invite_allowed, last_errand_at)
+report(id, errand_id, reporter_id, reason, narrative, escrow_frozen, state, resolved_at)
+dispute(id, report_id, errand_id, evidence_pack_ref, ruling[release|split|refund|void],
+        split_bps?, ruled_by, ruled_at, review_of?)</div>
+  <p style="font-size:12px;color:#645c50;margin:0 0 4px">Figure 1 — core schema. <em>spend_cap</em> on the errand is what makes an unknown basket safe to authorise.</p>
+
+  <h2 style="font-family:'Caprasimo',serif;font-size:24px;margin:26px 0 8px">4. Matching and the bid auction</h2>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 10px">Matching proposes; the requester decides. On <code style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px;background:#f0eadc;padding:1px 5px;border-radius:4px">errand.posted</code>, matching scores available runners inside a 5 km radius and notifies the top 25. The auction service opens a 12-minute window; bids are sealed — a runner sees the guide range and nothing else, which stops the price race that open bidding produces in thin markets.</p>
+  <div style="break-inside:avoid;background:#f7f1e5;border-radius:16px;padding:16px 18px;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.7;color:#3b3730;margin:0 0 8px;white-space:pre-wrap">score = 0.35 · proximity        (haversine, decayed over 5 km)
+      + 0.25 · reliability      (completion rate, last 90 days)
+      + 0.20 · category_fit     (past errands of this type)
+      + 0.10 · rating           (Bayesian, prior = platform mean)
+      + 0.10 · freshness        (inverse of jobs awarded today — spreads work)
+      − penalties               (open dispute, expiring KYC, cancel rate > 8%)</div>
+  <p style="font-size:12px;color:#645c50;margin:0 0 12px">Figure 2 — shortlist ranking. Weights are config, not code; the pilot tunes them weekly.</p>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 10px">Window mechanics: first bid starts a 12-minute countdown, extended to 4 minutes remaining whenever a new bid lands, capped at 25 minutes. The requester may award at any point. On award, <em>errand</em> moves to <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">awarded</span>, losing bids are released with a reason, and the shortlist is discarded. On expiry with no award, the errand re-posts once at a widened radius with the guide range nudged up by the median unawarded bid.</p>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 12px">Errand states: <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">draft → posted → bidding → awarded → en_route → at_source → basket_pending → basket_approved → in_transit → handover_pending → completed</span>, with <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">cancelled</span> and <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">disputed</span> reachable from most states. Transitions are the only writers of the errand row and each emits an event.</p>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 10px"><strong>Deadlines.</strong> A requester may put a clock on an errand — a <em>deadline_at</em> and an optional on-time bonus funded from their wallet alongside the fee. The deadline is a matching input (runners who cannot make the window are not shortlisted), a display on every bid card, and a settlement input: the bonus pays only if <em>handover.scanned_at</em> precedes the deadline. A missed deadline is not a breach and never forfeits the fee; it feeds the reliability term in the shortlist score.</p>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 10px"><strong>Two paths that skip the auction.</strong> A relationship row is written each time a pair completes an errand together; past requesters may then invite that runner directly, which creates an errand already in <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">awarded</span> at a proposed fee, with a decline returning it to open bidding. Separately, runners at tier 3 with a rating and completion rate above threshold may <strong>batch</strong>: accept several errands that share a <em>region_id</em> and run them on one trip. Batching is trip planning, not money pooling — each errand in a batch keeps its own card, its own approvals, its own escrow and its own dispute surface, and the matcher refuses a batch spanning regions rather than optimising across them.</p>
+
+  <h2 style="font-family:'Caprasimo',serif;font-size:24px;margin:26px 0 8px">5. Money movement: the one-time Qwest card</h2>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 10px">Two constraints shape the design. The runner never spends their own money, and the requester never pays for goods nobody can evidence. A per-errand virtual card satisfies both: it is the only instrument the runner can spend, it holds nothing until proof arrives, and it stops existing when the errand does.</p>
+  <ol style="font-size:14.5px;line-height:1.65;padding-left:22px;margin:0 0 14px">
+    <li style="margin-bottom:6px"><strong>Fund escrow at award.</strong> An STK push moves <em>spend_cap</em> = goods ceiling + agreed fee + 15% headroom into the platform escrow account. This is the only time the requester is debited.</li>
+    <li style="margin-bottom:6px"><strong>Issue the card.</strong> The card service mints a single-use card against that escrow balance: zero initial load, MCC allowlist for the errand type, geo-fenced where the issuer supports it, hard expiry at errand close + 30 minutes. The runner sees it only inside the app.</li>
+    <li style="margin-bottom:6px"><strong>Load in tranches.</strong> Each accepted proof event loads exactly one tranche — never the whole cap. A load is a ledger posting from escrow to card float, not a new charge to the requester.</li>
+    <li style="margin-bottom:6px"><strong>Settle and void.</strong> On completion the card is voided, unspent float returns to escrow, the runner's fee less commission is paid out to M-Pesa, and the requester is refunded the difference between cap and actual spend.</li>
+    <li><strong>Unhappy paths.</strong> Expiry, cancellation, a failed proof or an opened report voids the card immediately and freezes the escrow balance in place. The ledger records reversals; nothing is edited.</li>
+  </ol>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 10px">What counts as proof — and therefore who is asked to act — is a property of the errand type, carried on the basket as <em>release_mode</em>:</p>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin:0 0 8px">
+    <thead><tr>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Mode</th>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Errand types</th>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Tranche trigger</th>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Who acts</th>
+    </tr></thead>
+    <tbody>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>item_photo</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Market runs — many informal vendors, no till</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Every item on a vendor leg photographed and priced, then the requester approves that leg; only then does its subtotal load</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Runner evidences, requester approves — every stall</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>receipt</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Shop pickups — one merchant, real till</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Card authorisation matched to the OCR'd receipt total within KSh 100; release is automatic</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Nobody — system releases</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd"><strong>requester_confirm</strong></td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Deliveries, document drops, queue standing — no goods bought</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Handover PIN verified, then the requester confirms cashout; auto-settles 12 h after a verified handover</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Requester</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:12px;color:#645c50;margin:0 0 12px">Table 3 — release modes. The mode is chosen when the errand is posted and cannot change after award; changing it would change what the card is allowed to do mid-errand.</p>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 10px">Vendor legs are what make market runs work: one basket, several legs, each moving through <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">shopping → pending → approved → paid</span> on its own. Evidence gates the send, the requester gates the load. A leg can be sent for approval only when every item on it carries a photo whose vision score clears threshold and whose price sits inside the market band; the requester then approves that leg and its subtotal — and only its subtotal — loads onto the card. Item photos are also the evidence pack a dispute later runs on, which is why they are captured at purchase rather than reconstructed afterwards.</p>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 10px">Two exception paths interrupt that flow. A photo below threshold is rejected for retake; a second failure escalates the line to the requester, who may approve it on their own judgement — the override is recorded on the item and carried into the evidence pack. An item that is unavailable becomes a substitution proposal: the runner names the replacement and its price, and the requester accepts it (the line is repriced) or drops it (the line is refunded to zero). Neither path lets the runner move the money alone.</p>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 12px">Card acceptance is not guaranteed, so declines fall through a three-tier ladder, all against the same held money: the card itself; failing that, a platform-initiated M-Pesa till payment drawn from the loaded balance; failing that, the requester pays the till directly and escrow reimburses them at close. The third tier posts to a <em>requester_settled</em> account rather than card float — money that never touched the card must never be counted as card spend, or the provenance claim collapses.</p>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 12px">Every issuer and Daraja call carries an idempotency key derived from <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">errand_id + kind + attempt</span>, and callbacks are treated as unreliable: a reconciliation job replays payments, card loads and issuer authorisations every 15 minutes and is the only path that can mark money settled. Card float is a real ledger account — an authorisation that clears after a void is a known race, and the reconciler resolves it against escrow, never against the runner.</p>
+
+  <h2 style="font-family:'Caprasimo',serif;font-size:24px;margin:26px 0 8px">6. Identity, tiers and entitlements</h2>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 10px">KYC is gated: <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">tier 0</span> can browse open errands and read profiles, and can do nothing else. <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">tier 1</span> (name, DOB, National ID number, M-Pesa number, ID photos, liveness) may post and bid, capped at KSh 5,000 per errand. <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">tier 2</span> adds proof of address and a payout-name match and lifts the cap to KSh 20,000. <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">tier 3</span> is the runner tier and asks for what a requester does not have to give: a DCI certificate of good conduct under twelve months old, a next-of-kin contact never shown to requesters, and transport details where a boda or matatu is involved. Tier 3 plus a rating and completion rate above threshold is also what unlocks batching and direct invites.</p>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 12px">Entitlements are cached as short-lived signed claims in the session token, so the gateway rejects an unentitled write without a round trip; the cache TTL is 5 minutes so a trust-and-safety suspension takes effect quickly. Cases re-check annually, and immediately on a name change, device change plus payout change, or a second upheld dispute.</p>
+
+  <h2 style="font-family:'Caprasimo',serif;font-size:24px;margin:26px 0 8px">7. Safety, escrow and adjudication</h2>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 10px">SOS opens a case, snapshots the live location and both verified identities, and dials 999 from the device. Handover is a QR scan rather than a spoken code: the requester's device displays a single-use token, the runner scans it, and the server records the scan with its geo-stamp — proof that cannot be guessed, overheard or claimed after the fact, and the settlement trigger for requester_confirm errands. Reported location is only shared for the duration of an active errand, plus 24 hours.</p>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 10px">Escrow is the platform's answer to disputes, and it is deliberately symmetrical. A report filed before settlement freezes the escrow balance and voids the card: the requester cannot lose money that has not moved, and the runner cannot be stiffed for a purchase already evidenced. Neither side is asked to negotiate with the other, and neither side controls the outcome.</p>
+  <p style="font-size:14.5px;line-height:1.6;margin:0 0 12px">Judgement is passed by <strong>Legal Operations</strong>, a platform function with the only authority to split or reverse a frozen escrow. Trust &amp; safety assembles an evidence pack from records the errand already produced — item photos with their vision scores, card authorisations, receipt OCR, the handover PIN and its geo-stamp, the message thread and both KYC tiers — and Legal Operations rules on it: release, split (in basis points), refund or void. Rulings are append-only, cite the evidence they rest on, target 24 hours, and bind both parties; each side may request one review, decided by a different reviewer. Adverse findings feed back into the matching penalties and, at the extreme, the KYC entitlement tier.</p>
+
+  <h2 style="font-family:'Caprasimo',serif;font-size:24px;margin:26px 0 8px">8. Non-functional targets</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:13px;margin:0 0 8px">
+    <thead><tr>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Concern</th>
+      <th style="text-align:left;padding:7px 8px;border-bottom:1px solid #201e1d;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:#645c50">Target</th>
+    </tr></thead>
+    <tbody>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Shortlist latency</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">p95 under 400 ms from <code style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">errand.posted</code></td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Bid delivery</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Push under 2 s; SMS fallback within 30 s</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Payment settlement</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Runner payout p95 under 3 min after approval</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Low-bandwidth mode</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Basket and tracking usable on 2G; images upload deferred and queued</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Data retention</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Raw KYC documents 7 years, encrypted, access-logged; location 24 h</td></tr>
+      <tr><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Auditability</td><td style="padding:7px 8px;border-bottom:1px solid #e2d5bd">Every shilling traceable to a posting pair; ledger append-only</td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="font-family:'Caprasimo',serif;font-size:24px;margin:26px 0 8px">9. Open risks</h2>
+  <ul style="font-size:14.5px;line-height:1.65;padding-left:22px;margin:0">
+    <li style="margin-bottom:6px"><strong>Thin supply at launch.</strong> A sealed auction with no bidders is worse than auto-dispatch. Mitigation: fall back to direct offer at the guide ceiling to the top three runners after the first empty window.</li>
+    <li style="margin-bottom:6px"><strong>Card acceptance at informal stalls.</strong> A market trader with no card terminal cannot be paid by card at all. The pilot needs the card to sit behind an M-Pesa till payment initiated from the loaded balance; where even that is absent, a tranche must be payable as cash-out to the runner against the same photo proof — which weakens the evidence chain and needs a lower cap.</li>
+    <li style="margin-bottom:6px"><strong>Photo proof is gameable.</strong> A photo shows an item, not its price or that it was bought. Per-item price bands, per-market baselines and outlier flags do most of the work; expect a period where legal ops rulings, not the model, are the real control.</li>
+    <li style="margin-bottom:6px"><strong>Issuer dependency.</strong> Per-errand single-use cards at low ticket sizes need an issuer that tolerates high card churn and sub-minute issuance. If no local issuer will, the fallback is one reloadable runner card with per-errand spend windows — weaker isolation, same release logic.</li>
+    <li><strong>Escrow holds tie up funds.</strong> Cap plus 15% headroom is money the requester cannot use for the errand's duration; tune against real basket variance, and shorten the window rather than shrinking the headroom.</li>
+  </ul>
+
+  <div slot="footer" style="display:flex;justify-content:space-between;font-size:10px;color:#82796a;padding-top:6px;border-top:1px solid #dcd3c4">
+    <span>Restricted document — do not circulate; access limited to the system administrator</span><span>Side Qwest</span>
+  </div>
+</doc-page>
+
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,318 @@
+# .github/workflows/ci.yml
+# The pipeline that makes 07-security.md and 09-appsec-audit.md true. Before this file, every
+# control in both documents was a claim: RLS existed as SQL nobody had run, the rate limits
+# were a registry nobody exercised, and the boot-time secret refusals could be deleted in a
+# refactor without a single test going red.
+#
+# Ordering principle: the cheap gates that fail on nearly every real mistake run first
+# (typecheck, lint, secret scan), and the expensive ones that need a database run once, in
+# parallel, against a real Postgres. Nothing here runs on a self-hosted runner and nothing
+# has access to production credentials.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # A weekly run catches dependency CVEs disclosed after a merge, which is most of them.
+  schedule:
+    - cron: '17 3 * * 1'
+
+# A second push to the same PR cancels the first. Saves runner minutes and stops two
+# migration gates racing on the same shadow database.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  # Postgres with PostGIS and h3. Pinned by digest in the real file — a floating tag means
+  # the extension set can change under a green build.
+  PG_IMAGE: postgis/postgis:16-3.4
+
+jobs:
+  # ───────────────────────────────────────────── fast gates
+
+  static:
+    name: typecheck · lint · format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: corepack enable && pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+
+      # The rules that encode findings rather than style. Each one is a bug this repo
+      # actually shipped, so they are errors and not warnings.
+      - name: custom lint rules present
+        run: |
+          set -euo pipefail
+          # P-2: `&&` between two SQL predicates evaluates to the second operand, which turned
+          # a per-tranche UPDATE into a whole-table one.
+          grep -q "no-restricted-syntax" .eslintrc.cjs
+          grep -q "sql-predicate-and" .eslintrc.cjs
+          # 09-appsec #6: the console must never render user text as HTML.
+          grep -q "react/no-danger" .eslintrc.cjs
+
+      # RLS depends entirely on route code going through app.tx(req, fn). A bare
+      # app.db.transaction runs with no actor, and the proxy throws at runtime — but a
+      # runtime throw in a rarely-hit route is a production incident, so it is also a
+      # build failure.
+      - name: no unscoped database transactions in route code
+        run: |
+          set -euo pipefail
+          if grep -rn "db\.transaction(" code/api/routes/ ; then
+            echo "::error::Route code must use app.tx(req, fn); a bare transaction has no RLS actor"
+            exit 1
+          fi
+
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # history too: a rotated-but-committed key is still a leak
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+
+      # Belt to gitleaks' braces, and specific to this repo: the SECRET_KEYS list in env.ts
+      # names every credential the system holds. None of them may appear anywhere else with
+      # a literal value.
+      - name: no hardcoded credentials outside env.ts
+        run: |
+          set -euo pipefail
+          KEYS=$(grep -oE "'[A-Z_]+'" code/config/env.ts | tr -d "'" | sort -u)
+          fail=0
+          for k in $KEYS; do
+            hits=$(grep -rn --include='*.ts' --include='*.tsx' --include='*.yml' --include='*.yaml' \
+                   -E "${k}\s*[:=]\s*['\"][^'\"]{8,}" . \
+                   | grep -v 'code/config/env.ts' \
+                   | grep -v '\.example' || true)
+            if [ -n "$hits" ]; then echo "$hits"; fail=1; fi
+          done
+          if [ -f .env ]; then echo "::error::.env committed"; fail=1; fi
+          [ "$fail" -eq 0 ] || { echo "::error::hardcoded credential"; exit 1; }
+
+  deps:
+    name: dependency + container scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: pnpm }
+      - run: corepack enable && pnpm install --frozen-lockfile
+      # Critical blocks the build; high is reported and triaged. A policy that blocks on
+      # everything gets bypassed within a fortnight, which is worse than one that blocks on
+      # what matters.
+      - run: pnpm audit --audit-level critical
+      - uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+  # ───────────────────────────────────────────── database gates
+
+  migrations:
+    name: migration gate
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: sq_shadow
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+        ports: ['5432:5432']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: pnpm }
+      - run: corepack enable && pnpm install --frozen-lockfile
+
+      # 1. Every migration applies to an empty database, in order, without error.
+      - name: forward migrate
+        run: pnpm migrate:up
+        env:
+          DATABASE_URL: postgres://postgres:ci@localhost:5432/sq_shadow
+
+      # 2. The ORM's view of the schema matches what the migrations produced. A drifted
+      # schema means the next generated migration will contain someone's forgotten change.
+      - name: no schema drift
+        run: |
+          pnpm drizzle-kit check
+          pnpm drizzle-kit generate --name ci_drift_probe
+          if [ -n "$(git status --porcelain migrations/)" ]; then
+            echo "::error::schema drift: the ORM schema and the migrations disagree"
+            git --no-pager diff migrations/
+            exit 1
+          fi
+
+      # 3. Migrations are additive, or they are declared. A column drop or a type change on
+      # a live table is a deploy-order decision, not a migration detail — the marker forces
+      # the author to say they thought about it and to write the rollback.
+      - name: destructive changes are declared
+        run: |
+          set -euo pipefail
+          NEW=$(git diff --name-only --diff-filter=A origin/${{ github.base_ref || 'main' }}...HEAD -- '*.sql' || true)
+          for f in $NEW; do
+            if grep -qiE '^\s*(DROP (TABLE|COLUMN)|ALTER COLUMN .* TYPE|DROP NOT NULL|TRUNCATE)' "$f"; then
+              grep -qi -- '-- destructive: acknowledged' "$f" || {
+                echo "::error file=$f::destructive DDL needs a '-- destructive: acknowledged' marker and a rollback note"
+                exit 1; }
+            fi
+          done
+
+      # 4. The ledger's immutability promises are structural, not conventional. If a future
+      # migration grants UPDATE on posting, the audit story collapses silently.
+      - name: ledger stays append-only
+        run: pnpm tsx scripts/assert-ledger-grants.ts
+        env:
+          DATABASE_URL: postgres://postgres:ci@localhost:5432/sq_shadow
+
+      # 5. Every table has RLS enabled AND forced, every RLS table has at least one policy,
+      # no sidequest role can bypass. These are the three queries at the foot of 03c-rls.sql.
+      - name: RLS coverage
+        run: pnpm tsx scripts/assert-rls-coverage.ts
+        env:
+          DATABASE_URL: postgres://postgres:ci@localhost:5432/sq_shadow
+
+      # 6. Currency invariants from 03e: no posting group mixes currencies, no enabled market
+      # sits on a disabled currency, and the balance check is per-currency.
+      - name: currency invariants
+        run: pnpm tsx scripts/assert-currency-invariants.ts
+        env:
+          DATABASE_URL: postgres://postgres:ci@localhost:5432/sq_shadow
+
+  security-tests:
+    name: cross-tenant + rate limit + headers
+    runs-on: ubuntu-latest
+    needs: [migrations]
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env: { POSTGRES_PASSWORD: ci, POSTGRES_DB: sq_test }
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+        ports: ['5432:5432']
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: pnpm }
+      - run: corepack enable && pnpm install --frozen-lockfile
+      - run: pnpm migrate:up
+        env: { DATABASE_URL: 'postgres://postgres:ci@localhost:5432/sq_test' }
+
+      # The suite runs as sidequest_app over PgBouncer in transaction mode. Both details are
+      # load-bearing: as a superuser every policy is bypassed and the suite passes
+      # regardless, and without the pooler the SET LOCAL leak test proves nothing.
+      - run: pnpm tsx scripts/ci-create-roles.ts
+        env: { DATABASE_URL: 'postgres://postgres:ci@localhost:5432/sq_test' }
+      - run: pnpm tsx scripts/ci-start-pgbouncer.ts
+
+      - name: cross-tenant suite
+        run: pnpm vitest run code/api/test/security/
+        env:
+          DATABASE_URL: postgres://sidequest_app:ci@localhost:6432/sq_test
+          REDIS_URL: redis://localhost:6379
+          ADMIN_DATABASE_URL: postgres://postgres:ci@localhost:5432/sq_test
+
+      # The assignment race and the approval transaction, hammered concurrently. This is the
+      # test that would catch a regression in the conditional UPDATE — the one place where a
+      # correctness bug is also a money bug.
+      - name: concurrency suite
+        run: pnpm vitest run code/api/test/concurrency/ --pool threads --no-file-parallelism
+        env:
+          DATABASE_URL: postgres://sidequest_app:ci@localhost:6432/sq_test
+          REDIS_URL: redis://localhost:6379
+
+  money-tests:
+    name: ledger + reconciliation
+    runs-on: ubuntu-latest
+    needs: [migrations]
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env: { POSTGRES_PASSWORD: ci, POSTGRES_DB: sq_money }
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+        ports: ['5432:5432']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: pnpm }
+      - run: corepack enable && pnpm install --frozen-lockfile
+      - run: pnpm migrate:up
+        env: { DATABASE_URL: 'postgres://postgres:ci@localhost:5432/sq_money' }
+
+      - name: ledger property tests
+        run: pnpm vitest run code/domain/ledger code/domain/money code/domain/pricing
+        env: { DATABASE_URL: 'postgres://postgres:ci@localhost:5432/sq_money' }
+
+      # The gate that P-1 needed and did not have. A deliberately wrong-but-balanced posting
+      # group is injected; the reconciliation job must fail. If this test passes while
+      # reconciliation reports clean, the nightly job is decorative.
+      - name: reconciliation catches a balanced-but-wrong group
+        run: pnpm tsx scripts/assert-reconciliation-detects.ts
+        env: { DATABASE_URL: 'postgres://postgres:ci@localhost:5432/sq_money' }
+
+  config-gates:
+    name: config refusals · headers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: pnpm }
+      - run: corepack enable && pnpm install --frozen-lockfile
+
+      # Production config must refuse to boot on a placeholder secret, an owner-role
+      # DATABASE_URL, a plaintext origin, an empty ops allowlist, the Daraja sandbox or the
+      # mock issuer. Each refusal is a line in env.ts that a refactor could delete.
+      - run: pnpm vitest run code/api/test/security/config.test.ts
+
+      # Headers regress silently whenever someone adds a framework plugin, so they are
+      # snapshotted against a live response rather than read from source.
+      - run: pnpm vitest run code/api/test/security/headers.test.ts
+
+  # ───────────────────────────────────────────── build
+
+  build:
+    name: build + sbom
+    runs-on: ubuntu-latest
+    needs: [static, secrets, deps, migrations, security-tests, money-tests, config-gates]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: pnpm }
+      - run: corepack enable && pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: container image
+        run: docker build -t sidequest/api:${{ github.sha }} -f infra/docker/api.Dockerfile .
+      # An SBOM per build is what makes the next CVE announcement answerable in minutes
+      # instead of an afternoon.
+      - uses: anchore/sbom-action@v0
+        with:
+          image: sidequest/api:${{ github.sha }}
+          format: spdx-json
+      - uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: sidequest/api:${{ github.sha }}
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true

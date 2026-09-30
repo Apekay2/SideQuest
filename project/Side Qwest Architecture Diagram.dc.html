@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;600;700&display=swap">
+<link rel="stylesheet" href="_ds/organic-4f4473c1-637a-4031-9a06-57d81f0f6a6a/styles.css">
+<script src="_ds/organic-4f4473c1-637a-4031-9a06-57d81f0f6a6a/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:#ece0ca;color:#201e1d;font-family:"Figtree",system-ui,sans-serif}
+a{color:#8c491a}a:hover{color:#643312}
+*{box-sizing:border-box}
+</style>
+</helmet>
+<div style="width:1760px;padding:44px 48px 56px;display:flex;flex-direction:column;gap:20px">
+  <div style="display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap">
+    <h1 style="font-family:'Caprasimo',serif;font-size:40px;margin:0;line-height:1;letter-spacing:-.015em">Side Qwest — platform architecture</h1>
+    <p style="margin:0 0 5px;font-size:14px;color:#645c50">Nairobi pilot. Sealed-bid marketplace on a ride-hailing spine: a one-time card per errand, proof-gated releases, escrow that protects both sides. Restricted — system administrator only.</p>
+  </div>
+
+  <div style="display:flex;gap:20px;align-items:flex-start">
+    <div style="flex:1;display:flex;flex-direction:column;gap:16px">
+
+      <!-- clients -->
+      <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:26px;padding:18px 20px">
+        <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#82796a;margin-bottom:12px">Clients</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+          <div style="background:#ebddc5;border-radius:20px;padding:14px 16px"><div style="font-family:'Caprasimo',serif;font-size:16px">Requester app</div><div style="font-size:11.5px;color:#645c50;margin-top:3px">Post · pick a bid · approve basket</div></div>
+          <div style="background:#ebddc5;border-radius:20px;padding:14px 16px"><div style="font-family:'Caprasimo',serif;font-size:16px">Runner app</div><div style="font-size:11.5px;color:#645c50;margin-top:3px">Browse · blind bid · basket · handover</div></div>
+          <div style="background:#ebddc5;border-radius:20px;padding:14px 16px"><div style="font-family:'Caprasimo',serif;font-size:16px">Ops console</div><div style="font-size:11.5px;color:#645c50;margin-top:3px">KYC queue · disputes · refunds</div></div>
+          <div style="background:#ebddc5;border-radius:20px;padding:14px 16px"><div style="font-family:'Caprasimo',serif;font-size:16px">USSD / SMS</div><div style="font-size:11.5px;color:#645c50;margin-top:3px">Low-data fallback for bids and alerts</div></div>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:center"><div style="width:2px;height:22px;background:#c0b6a5"></div></div>
+
+      <!-- edge -->
+      <div style="background:#c67139;color:#f5ead8;border-radius:26px;padding:18px 22px;display:flex;gap:26px;align-items:center;flex-wrap:wrap">
+        <div><div style="font-family:'Caprasimo',serif;font-size:20px">API gateway</div><div style="font-size:11.5px;opacity:.85">TLS · phone-session auth · signed entitlement claims (5 min TTL) · rate limits · idempotency keys</div></div>
+        <div style="width:1px;height:38px;background:rgba(245,234,216,.4)"></div>
+        <div><div style="font-family:'Caprasimo',serif;font-size:20px">Realtime channel</div><div style="font-size:11.5px;opacity:.85">WebSocket + push; degrades to SMS</div></div>
+      </div>
+
+      <div style="display:flex;justify-content:center"><div style="width:2px;height:22px;background:#c0b6a5"></div></div>
+
+      <!-- domain services -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+        <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:26px;padding:16px">
+          <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#8c491a;margin-bottom:10px">Marketplace</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="background:#fff2eb;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">errand</div><div style="font-size:11px;color:#645c50">state machine · source of truth</div></div>
+            <div style="background:#fff2eb;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">auction</div><div style="font-size:11px;color:#645c50">sealed bids · 12-min window · award</div></div>
+            <div style="background:#fff2eb;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">matching</div><div style="font-size:11px;color:#645c50">shortlist top 25 in 5 km · deadline filter · scorer</div></div>
+            <div style="background:#fff2eb;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">relationships</div><div style="font-size:11px;color:#645c50">regulars · direct invites · tier-3 batching by region</div></div>
+          </div>
+        </div>
+        <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:26px;padding:16px">
+          <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#8c491a;margin-bottom:10px">Fulfilment</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="background:#fff2eb;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">basket</div><div style="font-size:11px;color:#645c50">vendor legs · item photos · substitutions</div></div>
+            <div style="background:#fff2eb;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">tracking</div><div style="font-size:11px;color:#645c50">milestones · pings · deadline clock · 24 h TTL</div></div>
+            <div style="background:#fff2eb;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">handover</div><div style="font-size:11px;color:#645c50">single-use QR · geo-stamped scan</div></div>
+          </div>
+        </div>
+        <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:26px;padding:16px">
+          <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#56633f;margin-bottom:10px">Money</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="background:#f0fae1;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">card</div><div style="font-size:11px;color:#645c50">one-time issue · tranche loads · void at close</div></div>
+            <div style="background:#f0fae1;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">payments</div><div style="font-size:11px;color:#645c50">escrow fund · settle · payout · refund</div></div>
+            <div style="background:#f0fae1;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">ledger</div><div style="font-size:11px;color:#645c50">double-entry · append-only · card float account</div></div>
+            <div style="background:#f0fae1;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">reconciler</div><div style="font-size:11px;color:#645c50">15-min replay vs issuer &amp; Daraja</div></div>
+          </div>
+        </div>
+        <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:26px;padding:16px">
+          <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#56633f;margin-bottom:10px">Identity &amp; trust</div>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="background:#f0fae1;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">identity</div><div style="font-size:11px;color:#645c50">accounts · devices · two roles</div></div>
+            <div style="background:#f0fae1;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">kyc</div><div style="font-size:11px;color:#645c50">cases · tiers 0–2 · entitlements</div></div>
+            <div style="background:#f0fae1;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">trust &amp; safety</div><div style="font-size:11px;color:#645c50">SOS · reports · escrow freeze · evidence pack</div></div>
+            <div style="background:#f0fae1;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">legal ops</div><div style="font-size:11px;color:#645c50">rulings: release · split · refund · void</div></div>
+            <div style="background:#f0fae1;border-radius:16px;padding:11px 13px"><div style="font-weight:600;font-size:13.5px">notify</div><div style="font-size:11px;color:#645c50">push · SMS · USSD</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- event bus -->
+      <div style="background:#201e1d;color:#f5ead8;border-radius:26px;padding:16px 22px;display:flex;gap:22px;align-items:center;flex-wrap:wrap">
+        <div style="font-family:'Caprasimo',serif;font-size:19px">Event bus</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;font-family:ui-monospace,Menlo,monospace;font-size:11.5px">
+          <span style="background:rgba(245,234,216,.14);padding:5px 11px;border-radius:999px">errand.posted</span>
+          <span style="background:rgba(245,234,216,.14);padding:5px 11px;border-radius:999px">bid.placed</span>
+          <span style="background:rgba(245,234,216,.14);padding:5px 11px;border-radius:999px">errand.awarded</span>
+          <span style="background:rgba(245,234,216,.14);padding:5px 11px;border-radius:999px">card.issued</span>
+          <span style="background:rgba(245,234,216,.14);padding:5px 11px;border-radius:999px">item.photographed</span>
+          <span style="background:rgba(245,234,216,.14);padding:5px 11px;border-radius:999px">leg.released</span>
+          <span style="background:rgba(245,234,216,.14);padding:5px 11px;border-radius:999px">receipt.matched</span>
+          <span style="background:rgba(245,234,216,.14);padding:5px 11px;border-radius:999px">card.voided</span>
+          <span style="background:rgba(245,234,216,.14);padding:5px 11px;border-radius:999px">dispute.ruled</span>
+          <span style="background:rgba(245,234,216,.14);padding:5px 11px;border-radius:999px">handover.verified</span>
+          <span style="background:rgba(245,234,216,.14);padding:5px 11px;border-radius:999px">identity.tier_changed</span>
+          <span style="background:rgba(245,234,216,.14);padding:5px 11px;border-radius:999px">report.opened</span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:26px;padding:16px">
+          <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#82796a;margin-bottom:10px">Stores</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px">
+            <span style="background:#ebddc5;padding:7px 13px;border-radius:999px">Postgres — errand, bid, basket, payment</span>
+            <span style="background:#ebddc5;padding:7px 13px;border-radius:999px">Postgres append-only — ledger</span>
+            <span style="background:#ebddc5;padding:7px 13px;border-radius:999px">Redis — geo index, bid timers, sessions</span>
+            <span style="background:#ebddc5;padding:7px 13px;border-radius:999px">Object store (encrypted) — ID docs, receipts</span>
+            <span style="background:#ebddc5;padding:7px 13px;border-radius:999px">Warehouse — pricing outliers, weights tuning</span>
+          </div>
+        </div>
+        <div style="background:#f9f4ed;border:1px solid #7a8a5e;border-radius:26px;padding:16px">
+          <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#56633f;margin-bottom:10px">External rails</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px">
+            <span style="background:#f0fae1;padding:7px 13px;border-radius:999px">M-Pesa Daraja — STK push, B2C payout</span>
+            <span style="background:#f0fae1;padding:7px 13px;border-radius:999px">ID &amp; liveness vendor</span>
+            <span style="background:#f0fae1;padding:7px 13px;border-radius:999px">Maps &amp; routing</span>
+            <span style="background:#f0fae1;padding:7px 13px;border-radius:999px">SMS / USSD aggregator</span>
+            <span style="background:#f0fae1;padding:7px 13px;border-radius:999px">Emergency dispatch (999)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- right rail: flow -->
+    <div style="width:352px;flex:none;display:flex;flex-direction:column;gap:14px">
+      <div style="background:#f9f4ed;border:1px solid #dcd3c4;border-radius:26px;padding:18px">
+        <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#82796a;margin-bottom:12px">One errand, end to end</div>
+        <div style="display:flex;flex-direction:column;gap:0">
+          <div style="display:flex;gap:12px"><div style="width:9px;height:9px;border-radius:999px;background:#c67139;margin-top:6px;flex:none"></div><div style="padding-bottom:13px"><div style="font-size:13px;font-weight:600">posted</div><div style="font-size:11.5px;color:#645c50">tier check → shortlist 25 → sealed window opens</div></div></div>
+          <div style="display:flex;gap:12px"><div style="width:9px;height:9px;border-radius:999px;background:#c67139;margin-top:6px;flex:none"></div><div style="padding-bottom:13px"><div style="font-size:13px;font-weight:600">bidding</div><div style="font-size:11.5px;color:#645c50">blind fees; window extends on late bids</div></div></div>
+          <div style="display:flex;gap:12px"><div style="width:9px;height:9px;border-radius:999px;background:#c67139;margin-top:6px;flex:none"></div><div style="padding-bottom:13px"><div style="font-size:13px;font-weight:600">awarded</div><div style="font-size:11.5px;color:#645c50">escrow funded via STK push; one-time card issued at zero load; PIN issued</div></div></div>
+          <div style="display:flex;gap:12px"><div style="width:9px;height:9px;border-radius:999px;background:#7a8a5e;margin-top:6px;flex:none"></div><div style="padding-bottom:13px"><div style="font-size:13px;font-weight:600">spending · release mode decides</div><div style="font-size:11.5px;color:#645c50">photos + requester approval per stall · receipt match auto-releases · no goods, requester confirms</div></div></div>
+          <div style="display:flex;gap:12px"><div style="width:9px;height:9px;border-radius:999px;background:#7a8a5e;margin-top:6px;flex:none"></div><div style="padding-bottom:13px"><div style="font-size:13px;font-weight:600">tranche loaded</div><div style="font-size:11.5px;color:#645c50">escrow → card float, exactly one approved leg at a time</div></div></div>
+          <div style="display:flex;gap:12px"><div style="width:9px;height:9px;border-radius:999px;background:#c67139;margin-top:6px;flex:none"></div><div style="padding-bottom:13px"><div style="font-size:13px;font-weight:600">exceptions</div><div style="font-size:11.5px;color:#645c50">photo rejected → retake → escalate · substitution proposed → requester accepts · card declined → till → requester settles, reimbursed at close</div></div></div>
+          <div style="display:flex;gap:12px"><div style="width:9px;height:9px;border-radius:999px;background:#7a8a5e;margin-top:6px;flex:none"></div><div><div style="font-size:13px;font-weight:600">handover_verified → completed</div><div style="font-size:11.5px;color:#645c50">card voided, float returned, fee paid to M-Pesa</div></div></div>
+          <div style="display:flex;gap:12px"><div style="width:9px;height:9px;border-radius:999px;background:#8c491a;margin-top:6px;flex:none"></div><div><div style="font-size:13px;font-weight:600">disputed (any state)</div><div style="font-size:11.5px;color:#645c50">escrow frozen + card voided → legal ops rules on the evidence pack</div></div></div>
+        </div>
+      </div>
+
+      <div style="background:#ebddc5;border-radius:26px;padding:18px">
+        <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#8c491a;margin-bottom:10px">Money invariants</div>
+        <div style="display:flex;flex-direction:column;gap:9px;font-size:12.5px;color:#3b3730">
+          <div>Runner never fronts cash — the only spendable instrument is the errand's own card.</div>
+          <div>The card holds nothing until proof arrives, and stops existing when the errand closes.</div>
+          <div>A tranche loads for one requester-approved vendor leg only; unspent float returns to the requester.</div>
+          <div>Money the requester settles at the till is never counted as card spend — it is reimbursed from escrow at close.</div>
+          <div>Batched errands share a trip, never a card, an escrow or an approval.</div>
+          <div>Every shilling is a balanced posting pair; corrections are reversals, never edits.</div>
+          <div>A report freezes escrow and voids the card, protecting both sides equally.</div>
+          <div>Only Legal Operations can split or reverse a frozen escrow, and rulings bind both parties.</div>
+        </div>
+      </div>
+
+      <div style="background:#f9f4ed;border:1px dashed #c0b6a5;border-radius:26px;padding:18px">
+        <div style="font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#82796a;margin-bottom:10px">Gating</div>
+        <div style="display:flex;flex-direction:column;gap:8px;font-size:12.5px">
+          <div style="display:flex;justify-content:space-between"><span>tier 0</span><span style="color:#645c50">browse only</span></div>
+          <div style="display:flex;justify-content:space-between"><span>tier 1 · ID + liveness</span><span style="color:#645c50">post &amp; bid, KSh 5,000 cap</span></div>
+          <div style="display:flex;justify-content:space-between"><span>tier 2 · address + payout match</span><span style="color:#645c50">KSh 20,000 cap</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+</body>
+</html>

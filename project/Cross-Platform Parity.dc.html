@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caprasimo&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f5ead8; font-family: Figtree, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: #8c491a; text-decoration: none; border-bottom: 1px solid #ffc6a5; }
+  a:hover { color: #c67139; border-bottom-color: #c67139; }
+</style>
+</helmet>
+
+<div style="max-width: 1180px; margin: 0 auto; padding: 56px 24px 96px; color: #201e1d;">
+
+  <div style="max-width: 720px;">
+    <div style="font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase; color: #82796a; font-weight: 600;">Side Qwest · mobile parity</div>
+    <h1 style="font-family: Caprasimo, serif; font-size: 40px; line-height: 1.1; margin: 14px 0 0; font-weight: 400;">One product, two platforms</h1>
+    <p style="font-size: 16px; line-height: 1.65; color: #3b3730; margin: 18px 0 0; text-wrap: pretty;">The brand is identical on both: same Organic palette, same Caprasimo and Figtree, same information in the same order, same words. What changes is the mechanics each platform's users already have in their hands — where the primary action lives, how a sheet is dismissed, how a destructive choice is confirmed, and what a press feels like.</p>
+    <p style="font-size: 16px; line-height: 1.65; color: #3b3730; margin: 14px 0 0; text-wrap: pretty;">The rule the team can apply without asking: <strong style="font-weight: 600;">brand is shared, chrome is native.</strong> A runner who switches phones should recognise the app instantly and never have to relearn their thumb.</p>
+  </div>
+
+  <!-- ─────────────────────────────── 1. shell -->
+  <section style="margin-top: 72px;">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;">
+      <h2 style="font-family: Caprasimo, serif; font-size: 26px; margin: 0; font-weight: 400;">1 · Requester shell</h2>
+      <div style="font-size: 13px; color: #645c50;">Home · the tab bar is where the platforms genuinely part company</div>
+    </div>
+
+    <div style="display: flex; gap: 40px; flex-wrap: wrap; margin-top: 28px;">
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; color: #82796a; font-weight: 600;">iOS</div>
+        <x-import component-from-global-scope="IOSDevice" from="./frames/ios-frame.jsx" hint-size="402px,874px">
+          <div style="height: 100%; background: #f5ead8; display: flex; flex-direction: column; font-family: Figtree, sans-serif;">
+            <div style="padding: 62px 20px 8px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="font-family: Caprasimo, serif; font-size: 30px; color: #201e1d;">Home</div>
+                <div style="width: 36px; height: 36px; border-radius: 999px; background: #f9f4ed; border: 1px solid #dcd3c4;"></div>
+              </div>
+            </div>
+            <div style="flex: 1; overflow: hidden; padding: 12px 20px 0; display: flex; flex-direction: column; gap: 12px;">
+              <div style="font-size: 11px; letter-spacing: 1.3px; text-transform: uppercase; color: #82796a; font-weight: 600;">Live now</div>
+              <div style="background: #f9f4ed; border: 1px solid #dcd3c4; border-radius: 28px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                  <div>
+                    <div style="font-family: Caprasimo, serif; font-size: 17px; color: #201e1d;">Kangemi Market run</div>
+                    <div style="font-size: 12px; color: #645c50; margin-top: 3px;">Peter K. · stall 2 of 3</div>
+                  </div>
+                  <div style="background: #ebddc5; border-radius: 999px; padding: 6px 11px; font-size: 12px; color: #3b3730; font-weight: 600; white-space: nowrap;">18 min</div>
+                </div>
+                <div style="display: flex; gap: 6px; margin-top: 14px;">
+                  <div style="flex: 1; height: 6px; border-radius: 999px; background: #7a8a5e;"></div>
+                  <div style="flex: 1; height: 6px; border-radius: 999px; background: #c67139;"></div>
+                  <div style="flex: 1; height: 6px; border-radius: 999px; background: #e2d5bd;"></div>
+                </div>
+                <div style="font-size: 12px; color: #82796a; margin-top: 10px;">Photographed — waiting on your approval</div>
+              </div>
+              <div style="font-size: 11px; letter-spacing: 1.3px; text-transform: uppercase; color: #82796a; font-weight: 600; margin-top: 6px;">Post again</div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="background: #ebddc5; border-radius: 20px; padding: 13px 15px; display: flex; justify-content: space-between; align-items: center; min-height: 44px;">
+                  <span style="font-size: 13.5px; color: #201e1d;">Weekly greens</span>
+                  <span style="font-size: 13.5px; color: #645c50;">KSh 800</span>
+                </div>
+                <div style="background: #ebddc5; border-radius: 20px; padding: 13px 15px; display: flex; justify-content: space-between; align-items: center; min-height: 44px;">
+                  <span style="font-size: 13.5px; color: #201e1d;">Pharmacy run</span>
+                  <span style="font-size: 13.5px; color: #645c50;">KSh 450</span>
+                </div>
+              </div>
+            </div>
+            <div style="border-top: 1px solid #dcd3c4; background: rgba(249,244,237,0.92); backdrop-filter: blur(20px); padding: 7px 4px 0; height: 83px; display: flex; align-items: flex-start;">
+              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/></svg>
+                <span style="font-size: 10px; color: #8c491a; font-weight: 600;">Home</span>
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#82796a" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                <span style="font-size: 10px; color: #82796a;">Post</span>
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#82796a" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+                <span style="font-size: 10px; color: #82796a;">Activity</span>
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#82796a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6.5" width="18" height="12" rx="3"/><path d="M16 12.5h2"/></svg>
+                <span style="font-size: 10px; color: #82796a;">Wallet</span>
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#82796a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1.8-3.4 4.2-5 7-5s5.2 1.6 7 5"/></svg>
+                <span style="font-size: 10px; color: #82796a;">Profile</span>
+              </div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; color: #82796a; font-weight: 600;">Android</div>
+        <x-import component-from-global-scope="AndroidDevice" from="./frames/android-frame.jsx" hint-size="412px,892px">
+          <div style="height: 100%; background: #f5ead8; display: flex; flex-direction: column; position: relative; font-family: Figtree, sans-serif;">
+            <div style="padding: 16px 16px 8px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; min-height: 48px;">
+                <div style="font-family: Caprasimo, serif; font-size: 28px; color: #201e1d;">Home</div>
+                <div style="width: 40px; height: 40px; border-radius: 999px; background: #f9f4ed; border: 1px solid #dcd3c4;"></div>
+              </div>
+            </div>
+            <div style="flex: 1; overflow: hidden; padding: 8px 16px 0; display: flex; flex-direction: column; gap: 12px;">
+              <div style="font-size: 11px; letter-spacing: 1.3px; text-transform: uppercase; color: #82796a; font-weight: 600;">Live now</div>
+              <div style="background: #f9f4ed; border: 1px solid #dcd3c4; border-radius: 28px; padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                  <div>
+                    <div style="font-family: Caprasimo, serif; font-size: 17px; color: #201e1d;">Kangemi Market run</div>
+                    <div style="font-size: 12px; color: #645c50; margin-top: 3px;">Peter K. · stall 2 of 3</div>
+                  </div>
+                  <div style="background: #ebddc5; border-radius: 999px; padding: 6px 11px; font-size: 12px; color: #3b3730; font-weight: 600; white-space: nowrap;">18 min</div>
+                </div>
+                <div style="display: flex; gap: 6px; margin-top: 14px;">
+                  <div style="flex: 1; height: 6px; border-radius: 999px; background: #7a8a5e;"></div>
+                  <div style="flex: 1; height: 6px; border-radius: 999px; background: #c67139;"></div>
+                  <div style="flex: 1; height: 6px; border-radius: 999px; background: #e2d5bd;"></div>
+                </div>
+                <div style="font-size: 12px; color: #82796a; margin-top: 10px;">Photographed — waiting on your approval</div>
+              </div>
+              <div style="font-size: 11px; letter-spacing: 1.3px; text-transform: uppercase; color: #82796a; font-weight: 600; margin-top: 6px;">Post again</div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="background: #ebddc5; border-radius: 20px; padding: 13px 15px; display: flex; justify-content: space-between; align-items: center; min-height: 48px;">
+                  <span style="font-size: 13.5px; color: #201e1d;">Weekly greens</span>
+                  <span style="font-size: 13.5px; color: #645c50;">KSh 800</span>
+                </div>
+                <div style="background: #ebddc5; border-radius: 20px; padding: 13px 15px; display: flex; justify-content: space-between; align-items: center; min-height: 48px;">
+                  <span style="font-size: 13.5px; color: #201e1d;">Pharmacy run</span>
+                  <span style="font-size: 13.5px; color: #645c50;">KSh 450</span>
+                </div>
+              </div>
+            </div>
+            <div style="position: absolute; right: 16px; bottom: 96px; width: 64px; height: 64px; border-radius: 20px; background: #8c491a; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 16px rgba(32,30,29,0.22);">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff2eb" stroke-width="2.1" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </div>
+            <div style="background: #f9f4ed; border-top: 1px solid #dcd3c4; height: 80px; display: flex; align-items: center; padding: 0 4px;">
+              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <div style="width: 64px; height: 32px; border-radius: 16px; background: #ffc6a5; display: flex; align-items: center; justify-content: center;">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8c491a" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/></svg>
+                </div>
+                <span style="font-size: 12px; color: #8c491a; font-weight: 600;">Home</span>
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <div style="width: 64px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#645c50" stroke-width="1.9" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+                </div>
+                <span style="font-size: 12px; color: #645c50;">Activity</span>
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <div style="width: 64px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#645c50" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6.5" width="18" height="12" rx="3"/><path d="M16 12.5h2"/></svg>
+                </div>
+                <span style="font-size: 12px; color: #645c50;">Wallet</span>
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;">
+                <div style="width: 64px; height: 32px; display: flex; align-items: center; justify-content: center;">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#645c50" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1.8-3.4 4.2-5 7-5s5.2 1.6 7 5"/></svg>
+                </div>
+                <span style="font-size: 12px; color: #645c50;">Profile</span>
+              </div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="flex: 1; min-width: 260px; max-width: 380px;">
+        <div style="background: #f9f4ed; border: 1px solid #dcd3c4; border-radius: 28px; padding: 22px;">
+          <div style="font-family: Caprasimo, serif; font-size: 17px; margin-bottom: 4px;">What differs, and why</div>
+          <div style="display: grid; gap: 18px; margin-top: 16px;">
+            <div>
+              <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #82796a; font-weight: 600;">Primary action</div>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #3b3730; margin: 6px 0 0;">iOS puts <em>Post</em> in the tab bar as a fifth tab. Android drops it to four tabs and promotes Post to a floating action button. Both keep Post one thumb-reach away; neither fights the platform's own idea of where a create action lives.</p>
+            </div>
+            <div>
+              <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #82796a; font-weight: 600;">Active state</div>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #3b3730; margin: 6px 0 0;">iOS tints the icon and label terracotta. Android adds the M3 pill indicator behind the icon. Same colour token doing the work in both, drawn the way each platform draws it.</p>
+            </div>
+            <div>
+              <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #82796a; font-weight: 600;">Bar metrics</div>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #3b3730; margin: 6px 0 0;">49pt bar over a 34pt home indicator on iOS; 80dp bar on Android. Labels are 10px and 12px respectively — platform minimums, not a brand decision.</p>
+            </div>
+            <div>
+              <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #82796a; font-weight: 600;">Touch floor</div>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #3b3730; margin: 6px 0 0;">44pt on iOS, 48dp on Android. The rows use the larger of the two on each, which is why the regulars list is a touch taller on Android.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────── 2. approval -->
+  <section style="margin-top: 84px;">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;">
+      <h2 style="font-family: Caprasimo, serif; font-size: 26px; margin: 0; font-weight: 400;">2 · Stall approval</h2>
+      <div style="font-size: 13px; color: #645c50;">The money screen — the one place where the two builds stay deliberately identical</div>
+    </div>
+    <p style="font-size: 15px; line-height: 1.65; color: #3b3730; max-width: 720px; margin: 14px 0 0; text-wrap: pretty;">Everything above the button adapts freely. This screen does not. The photo, the itemised prices, the running total against the remaining cap, and the three actions sit in the same order, at the same sizes, with the same words on both platforms — because a requester approving a spend should never have to re-read a layout, and because a support call about a wrong approval has to be answerable without asking which phone they hold.</p>
+
+    <div style="display: flex; gap: 40px; flex-wrap: wrap; margin-top: 28px;">
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; color: #82796a; font-weight: 600;">iOS · sheet</div>
+        <x-import component-from-global-scope="IOSDevice" from="./frames/ios-frame.jsx" hint-size="402px,874px">
+          <div style="height: 100%; background: #201e1d; display: flex; flex-direction: column; justify-content: flex-end; font-family: Figtree, sans-serif;">
+            <div style="position: absolute; inset: 0; background: rgba(32,30,29,0.55);"></div>
+            <div style="position: relative; background: #f9f4ed; border-radius: 26px 26px 0 0; padding-bottom: 34px; max-height: 88%; display: flex; flex-direction: column;">
+              <div style="align-self: center; width: 44px; height: 5px; border-radius: 999px; background: #dcd3c4; margin-top: 10px; flex: none;"></div>
+              <div style="padding: 14px 20px 0; overflow: hidden; display: flex; flex-direction: column;">
+                <div style="font-family: Caprasimo, serif; font-size: 17px; color: #201e1d;">Mama Ngina Greens</div>
+                <div style="font-size: 12px; color: #82796a; margin-top: 2px;">Stall 2 of 3</div>
+                <div style="width: 100%; aspect-ratio: 16/9; border-radius: 26px; margin-top: 14px; background: #ebddc5; border: 1px solid #e2d5bd; display: flex; align-items: center; justify-content: center;">
+                  <span style="font-size: 12px; color: #82796a;">Runner's photo of the stall</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
+                  <div style="background: #ebddc5; border-radius: 20px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; min-height: 44px;">
+                    <div style="flex: 1;">
+                      <div style="font-size: 13.5px; color: #201e1d;">Sukuma wiki</div>
+                      <div style="font-size: 12px; color: #645c50; margin-top: 1px;">2 bunches</div>
+                    </div>
+                    <div style="font-size: 13.5px; color: #201e1d; font-variant-numeric: tabular-nums;">KSh 60</div>
+                  </div>
+                  <div style="background: #ebddc5; border-radius: 20px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; min-height: 44px;">
+                    <div style="flex: 1;">
+                      <div style="font-size: 13.5px; color: #201e1d;">Tomatoes</div>
+                      <div style="font-size: 12px; color: #645c50; margin-top: 1px;">1 kg</div>
+                      <div style="font-size: 11px; color: #7a8a5e; margin-top: 3px;">Substituted for Roma tomatoes</div>
+                    </div>
+                    <div style="font-size: 13.5px; color: #201e1d; font-variant-numeric: tabular-nums;">KSh 180</div>
+                  </div>
+                  <div style="background: #ebddc5; border-radius: 20px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; min-height: 44px;">
+                    <div style="flex: 1;">
+                      <div style="font-size: 13.5px; color: #201e1d;">Onions</div>
+                      <div style="font-size: 12px; color: #645c50; margin-top: 1px;">1 kg</div>
+                    </div>
+                    <div style="font-size: 13.5px; color: #201e1d; font-variant-numeric: tabular-nums;">KSh 140</div>
+                  </div>
+                </div>
+                <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: 18px;">
+                  <div>
+                    <div style="font-size: 11px; letter-spacing: 1.1px; text-transform: uppercase; color: #82796a; font-weight: 600;">Total</div>
+                    <div style="font-family: Caprasimo, serif; font-size: 22px; color: #201e1d;">KSh 380</div>
+                  </div>
+                  <div style="font-size: 12px; color: #82796a; margin-bottom: 4px;">KSh 620 left of cap</div>
+                </div>
+                <div style="margin-top: 16px; min-height: 52px; border-radius: 999px; background: #8c491a; display: flex; align-items: center; justify-content: center;">
+                  <span style="font-family: Caprasimo, serif; font-size: 15px; color: #fff2eb;">Approve KSh 380</span>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                  <div style="flex: 1; min-height: 44px; border-radius: 999px; border: 1px solid #dcd3c4; display: flex; align-items: center; justify-content: center;">
+                    <span style="font-size: 13.5px; color: #645c50;">Substitute</span>
+                  </div>
+                  <div style="flex: 1; min-height: 44px; border-radius: 999px; border: 1px solid #dcd3c4; display: flex; align-items: center; justify-content: center;">
+                    <span style="font-size: 13.5px; color: #645c50;">Decline</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; color: #82796a; font-weight: 600;">Android · bottom sheet</div>
+        <x-import component-from-global-scope="AndroidDevice" from="./frames/android-frame.jsx" hint-size="412px,892px">
+          <div style="height: 100%; background: #201e1d; display: flex; flex-direction: column; justify-content: flex-end; position: relative; font-family: Figtree, sans-serif;">
+            <div style="position: absolute; inset: 0; background: rgba(32,30,29,0.55);"></div>
+            <div style="position: relative; background: #f9f4ed; border-radius: 28px 28px 0 0; padding-bottom: 12px; max-height: 90%; display: flex; flex-direction: column;">
+              <div style="align-self: center; width: 32px; height: 4px; border-radius: 999px; background: #dcd3c4; margin-top: 12px; flex: none;"></div>
+              <div style="padding: 14px 16px 0; overflow: hidden; display: flex; flex-direction: column;">
+                <div style="font-family: Caprasimo, serif; font-size: 17px; color: #201e1d;">Mama Ngina Greens</div>
+                <div style="font-size: 12px; color: #82796a; margin-top: 2px;">Stall 2 of 3</div>
+                <div style="width: 100%; aspect-ratio: 16/9; border-radius: 26px; margin-top: 14px; background: #ebddc5; border: 1px solid #e2d5bd; display: flex; align-items: center; justify-content: center;">
+                  <span style="font-size: 12px; color: #82796a;">Runner's photo of the stall</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 16px;">
+                  <div style="background: #ebddc5; border-radius: 20px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; min-height: 48px;">
+                    <div style="flex: 1;">
+                      <div style="font-size: 13.5px; color: #201e1d;">Sukuma wiki</div>
+                      <div style="font-size: 12px; color: #645c50; margin-top: 1px;">2 bunches</div>
+                    </div>
+                    <div style="font-size: 13.5px; color: #201e1d; font-variant-numeric: tabular-nums;">KSh 60</div>
+                  </div>
+                  <div style="background: #ebddc5; border-radius: 20px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; min-height: 48px;">
+                    <div style="flex: 1;">
+                      <div style="font-size: 13.5px; color: #201e1d;">Tomatoes</div>
+                      <div style="font-size: 12px; color: #645c50; margin-top: 1px;">1 kg</div>
+                      <div style="font-size: 11px; color: #7a8a5e; margin-top: 3px;">Substituted for Roma tomatoes</div>
+                    </div>
+                    <div style="font-size: 13.5px; color: #201e1d; font-variant-numeric: tabular-nums;">KSh 180</div>
+                  </div>
+                  <div style="background: #ebddc5; border-radius: 20px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; min-height: 48px;">
+                    <div style="flex: 1;">
+                      <div style="font-size: 13.5px; color: #201e1d;">Onions</div>
+                      <div style="font-size: 12px; color: #645c50; margin-top: 1px;">1 kg</div>
+                    </div>
+                    <div style="font-size: 13.5px; color: #201e1d; font-variant-numeric: tabular-nums;">KSh 140</div>
+                  </div>
+                </div>
+                <div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: 18px;">
+                  <div>
+                    <div style="font-size: 11px; letter-spacing: 1.1px; text-transform: uppercase; color: #82796a; font-weight: 600;">Total</div>
+                    <div style="font-family: Caprasimo, serif; font-size: 22px; color: #201e1d;">KSh 380</div>
+                  </div>
+                  <div style="font-size: 12px; color: #82796a; margin-bottom: 4px;">KSh 620 left of cap</div>
+                </div>
+                <div style="margin-top: 16px; min-height: 56px; border-radius: 999px; background: #8c491a; display: flex; align-items: center; justify-content: center;">
+                  <span style="font-family: Caprasimo, serif; font-size: 15px; color: #fff2eb;">Approve KSh 380</span>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                  <div style="flex: 1; min-height: 48px; border-radius: 999px; border: 1px solid #dcd3c4; display: flex; align-items: center; justify-content: center;">
+                    <span style="font-size: 13.5px; color: #645c50;">Substitute</span>
+                  </div>
+                  <div style="flex: 1; min-height: 48px; border-radius: 999px; border: 1px solid #dcd3c4; display: flex; align-items: center; justify-content: center;">
+                    <span style="font-size: 13.5px; color: #645c50;">Decline</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="flex: 1; min-width: 260px; max-width: 380px;">
+        <div style="background: #fff2eb; border: 1px solid #ffc6a5; border-radius: 28px; padding: 22px;">
+          <div style="font-family: Caprasimo, serif; font-size: 17px; color: #8c491a;">Held identical on purpose</div>
+          <ul style="margin: 14px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 9px;">
+            <li style="font-size: 13.5px; line-height: 1.6; color: #3b3730;">Order of information: photo, items, total, cap, actions.</li>
+            <li style="font-size: 13.5px; line-height: 1.6; color: #3b3730;">The amount appears in the button label, not only in the total.</li>
+            <li style="font-size: 13.5px; line-height: 1.6; color: #3b3730;">Approve is never optimistic on either platform — it enters a loading state and the sheet only closes when the server confirms.</li>
+            <li style="font-size: 13.5px; line-height: 1.6; color: #3b3730;">Over cap: the total turns terracotta, Approve disables, and an inline sentence says by how much. No silent disabled button anywhere.</li>
+          </ul>
+        </div>
+        <div style="background: #f9f4ed; border: 1px solid #dcd3c4; border-radius: 28px; padding: 22px; margin-top: 14px;">
+          <div style="font-family: Caprasimo, serif; font-size: 17px;">What still adapts</div>
+          <div style="display: grid; gap: 14px; margin-top: 14px;">
+            <div>
+              <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #82796a; font-weight: 600;">Dismissal</div>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #3b3730; margin: 5px 0 0;">44×5 grabber and swipe-down on iOS; 32×4 drag handle plus the system back gesture on Android. A sheet that ignores Android's back button feels broken to half your users.</p>
+            </div>
+            <div>
+              <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #82796a; font-weight: 600;">Feedback</div>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #3b3730; margin: 5px 0 0;">Approve fires a light impact on iOS and a keyboard-tap effect on Android; success is a notification success and a single tick respectively.</p>
+            </div>
+            <div>
+              <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #82796a; font-weight: 600;">Press state</div>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #3b3730; margin: 5px 0 0;">iOS dims to the lighter terracotta on press. Android draws a ripple from the touch point. Same two tokens, different physics.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────── 3. destructive -->
+  <section style="margin-top: 84px;">
+    <div style="display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;">
+      <h2 style="font-family: Caprasimo, serif; font-size: 26px; margin: 0; font-weight: 400;">3 · Declining a stall</h2>
+      <div style="font-size: 13px; color: #645c50;">A destructive confirm is the clearest case for letting each platform be itself</div>
+    </div>
+
+    <div style="display: flex; gap: 40px; flex-wrap: wrap; margin-top: 28px;">
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; color: #82796a; font-weight: 600;">iOS · action sheet</div>
+        <x-import component-from-global-scope="IOSDevice" from="./frames/ios-frame.jsx" hint-size="402px,874px">
+          <div style="height: 100%; background: #201e1d; display: flex; flex-direction: column; justify-content: flex-end; font-family: Figtree, sans-serif;">
+            <div style="position: absolute; inset: 0; background: rgba(32,30,29,0.5);"></div>
+            <div style="position: relative; padding: 0 8px 42px; display: flex; flex-direction: column; gap: 8px;">
+              <div style="background: rgba(249,244,237,0.96); border-radius: 22px; overflow: hidden;">
+                <div style="padding: 16px 20px; text-align: center; border-bottom: 1px solid #ece0ca;">
+                  <div style="font-size: 13px; color: #645c50; line-height: 1.5;">Declining sends the stall back to Peter K. Nothing is charged.</div>
+                </div>
+                <div style="padding: 17px; text-align: center; border-bottom: 1px solid #ece0ca; min-height: 57px;">
+                  <span style="font-size: 17px; color: #8c491a; font-weight: 600;">Decline stall</span>
+                </div>
+                <div style="padding: 17px; text-align: center; min-height: 57px;">
+                  <span style="font-size: 17px; color: #3b3730;">Ask for a substitute</span>
+                </div>
+              </div>
+              <div style="background: rgba(249,244,237,0.96); border-radius: 22px; padding: 17px; text-align: center; min-height: 57px;">
+                <span style="font-size: 17px; color: #201e1d; font-weight: 600;">Cancel</span>
+              </div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="font-size: 12px; letter-spacing: 1.2px; text-transform: uppercase; color: #82796a; font-weight: 600;">Android · dialog</div>
+        <x-import component-from-global-scope="AndroidDevice" from="./frames/android-frame.jsx" hint-size="412px,892px">
+          <div style="height: 100%; background: #201e1d; display: flex; align-items: center; justify-content: center; padding: 24px; position: relative; font-family: Figtree, sans-serif;">
+            <div style="position: absolute; inset: 0; background: rgba(32,30,29,0.5);"></div>
+            <div style="position: relative; background: #f9f4ed; border-radius: 28px; padding: 24px; width: 100%;">
+              <div style="font-family: Caprasimo, serif; font-size: 22px; color: #201e1d; line-height: 1.25;">Decline this stall?</div>
+              <p style="font-size: 14px; line-height: 1.6; color: #3b3730; margin: 12px 0 0;">It goes back to Peter K. and nothing is charged. You can ask for a substitute instead.</p>
+              <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px;">
+                <div style="min-height: 40px; padding: 10px 14px; border-radius: 999px; display: flex; align-items: center;">
+                  <span style="font-size: 14px; color: #645c50; font-weight: 600;">Cancel</span>
+                </div>
+                <div style="min-height: 40px; padding: 10px 18px; border-radius: 999px; background: #8c491a; display: flex; align-items: center;">
+                  <span style="font-size: 14px; color: #fff2eb; font-weight: 600;">Decline</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </x-import>
+      </div>
+
+      <div style="flex: 1; min-width: 260px; max-width: 380px;">
+        <div style="background: #f9f4ed; border: 1px solid #dcd3c4; border-radius: 28px; padding: 22px;">
+          <div style="font-family: Caprasimo, serif; font-size: 17px;">Same decision, native shape</div>
+          <p style="font-size: 13.5px; line-height: 1.65; color: #3b3730; margin: 12px 0 0;">Both offer exactly three ways out — decline, substitute, back off — and both say the two things that matter: the stall returns to the runner, and no money moves. Beyond that they diverge completely, and should.</p>
+          <div style="display: grid; gap: 14px; margin-top: 18px;">
+            <div>
+              <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #82796a; font-weight: 600;">iOS</div>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #3b3730; margin: 5px 0 0;">Action sheet from the bottom, within thumb reach. Destructive option weighted in <span style="color: #8c491a; font-weight: 600;">accentDeep</span> rather than the system red — our palette carries the warning, and it still passes contrast at 17px.</p>
+            </div>
+            <div>
+              <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #82796a; font-weight: 600;">Android</div>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #3b3730; margin: 5px 0 0;">Centred M3 dialog, question as the headline, actions bottom-right with the confirming action last — the order Android users' hands already expect.</p>
+            </div>
+            <div>
+              <div style="font-size: 12px; letter-spacing: 1px; text-transform: uppercase; color: #82796a; font-weight: 600;">Not negotiable on either</div>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #3b3730; margin: 5px 0 0;">Nothing destructive is ever the default focused action, and no confirm is dismissible by tapping the scrim.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────────────────────── rules -->
+  <section style="margin-top: 84px;">
+    <h2 style="font-family: Caprasimo, serif; font-size: 26px; margin: 0 0 6px; font-weight: 400;">The whole rule, on one page</h2>
+    <p style="font-size: 15px; line-height: 1.65; color: #3b3730; max-width: 720px; margin: 0 0 26px; text-wrap: pretty;">Everything in the left column is generated from one source and cannot drift. Everything in the right column is resolved per platform at build time, so neither build carries the other's assumptions.</p>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px;">
+      <div style="background: #f9f4ed; border: 1px solid #dcd3c4; border-radius: 28px; padding: 24px;">
+        <div style="font-size: 11px; letter-spacing: 1.3px; text-transform: uppercase; color: #82796a; font-weight: 600;">Shared · one source</div>
+        <div style="font-family: Caprasimo, serif; font-size: 20px; margin: 8px 0 16px;">Identical on both</div>
+        <div style="display: flex; flex-direction: column; gap: 11px;">
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #7a8a5e; font-size: 15px; line-height: 1;">■</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Colour, type, radii and spacing tokens</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #7a8a5e; font-size: 15px; line-height: 1;">■</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Every string, through <code style="font-family: ui-monospace, monospace; font-size: 12.5px; background: #ebddc5; padding: 1px 5px; border-radius: 5px;">useT()</code></span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #7a8a5e; font-size: 15px; line-height: 1;">■</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Screen inventory and navigation graph</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #7a8a5e; font-size: 15px; line-height: 1;">■</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Information order within every screen</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #7a8a5e; font-size: 15px; line-height: 1;">■</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">The money path — approval, ladder, settlement</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #7a8a5e; font-size: 15px; line-height: 1;">■</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Error and empty copy, and what each offers next</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #7a8a5e; font-size: 15px; line-height: 1;">■</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Never colour alone: icon plus label on every state</span></div>
+        </div>
+      </div>
+
+      <div style="background: #f9f4ed; border: 1px solid #dcd3c4; border-radius: 28px; padding: 24px;">
+        <div style="font-size: 11px; letter-spacing: 1.3px; text-transform: uppercase; color: #82796a; font-weight: 600;">Adapted · resolved per platform</div>
+        <div style="font-family: Caprasimo, serif; font-size: 20px; margin: 8px 0 16px;">Native on each</div>
+        <div style="display: flex; flex-direction: column; gap: 11px;">
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #c67139; font-size: 15px; line-height: 1;">▲</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Primary create action: fifth tab or FAB</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #c67139; font-size: 15px; line-height: 1;">▲</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Back: edge swipe and chevron, or system back and arrow</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #c67139; font-size: 15px; line-height: 1;">▲</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Confirms: action sheet, or M3 dialog</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #c67139; font-size: 15px; line-height: 1;">▲</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Press feedback: opacity dim, or ripple</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #c67139; font-size: 15px; line-height: 1;">▲</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Haptics, date and time pickers, share sheet</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #c67139; font-size: 15px; line-height: 1;">▲</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Touch floor: 44pt or 48dp</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #c67139; font-size: 15px; line-height: 1;">▲</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Permission priming, notification channels, deep links</span></div>
+        </div>
+      </div>
+
+      <div style="background: #ebddc5; border: 1px solid #e2d5bd; border-radius: 28px; padding: 24px;">
+        <div style="font-size: 11px; letter-spacing: 1.3px; text-transform: uppercase; color: #82796a; font-weight: 600;">Accessibility floor · both</div>
+        <div style="font-family: Caprasimo, serif; font-size: 20px; margin: 8px 0 16px;">Whichever is stricter</div>
+        <div style="display: flex; flex-direction: column; gap: 11px;">
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #645c50; font-size: 15px; line-height: 1;">●</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Text scales to 200% without clipping — the approval sheet scrolls rather than truncates</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #645c50; font-size: 15px; line-height: 1;">●</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Every control has a label read by VoiceOver and TalkBack, including the amount on Approve</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #645c50; font-size: 15px; line-height: 1;">●</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Body text at 4.5:1 against its own ground, checked on the sunk and tinted surfaces too</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #645c50; font-size: 15px; line-height: 1;">●</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Reduce-motion honoured: the sheet fades instead of rising</span></div>
+          <div style="display: flex; gap: 11px; align-items: baseline;"><span style="color: #645c50; font-size: 15px; line-height: 1;">●</span><span style="font-size: 13.5px; line-height: 1.55; color: #3b3730;">Swahili and English both fit every button at the largest supported size</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</x-dc>
+</body>
+</html>
