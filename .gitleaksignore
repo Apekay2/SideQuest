@@ -1,0 +1,6 @@
+# One historical false positive, ignored by exact fingerprint (commit:file:rule:line) so the
+# scanner stays fully active everywhere else, including future edits to the same file.
+# In 24e3184, .env.example had `JWT_SECRET=` with no value; the generic-api-key rule read
+# across the newline and took the next line (`JWT_TTL_SECONDS=900`) as the secret. The
+# template now uses CHANGEME placeholders (refused at boot), which the rule does not flag.
+24e31840b596be92349d9d3dd14ead61f849b940:.env.example:generic-api-key:21

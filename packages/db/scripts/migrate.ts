@@ -17,6 +17,19 @@ import { fileURLToPath } from 'node:url';
 const url = process.env.MIGRATE_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!url) { console.error('DATABASE_URL required'); process.exit(2); }
 
+// In GitHub Actions a failure is also written as an annotation, naming the file and the
+// database's own message: annotations are readable from the PR, logs are not always at hand.
+let current = '(connecting)';
+const fail = (err: unknown) => {
+  const e = err as { message?: string; code?: string; position?: string };
+  const msg = `${current}: ${e?.message ?? String(err)}${e?.code ? ` [${e.code}]` : ''}${e?.position ? ` at char ${e.position}` : ''}`;
+  console.error(`\nmigration failed — ${msg}`);
+  if (process.env.GITHUB_ACTIONS) console.error(`::error title=migration failed::${msg.replace(/\r?\n/g, ' ')}`);
+  process.exit(1);
+};
+process.on('unhandledRejection', fail);
+process.on('uncaughtException', fail);
+
 // Bundled into the worker image, the file no longer sits next to migrations/; the image says where.
 const dir = process.env.MIGRATIONS_DIR ?? join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
 const sql = postgres(url, { max: 1, onnotice: () => {} });
@@ -46,6 +59,7 @@ for (const file of files) {
     }
     continue;
   }
+  current = file;
   process.stdout.write(`applying ${file} … `);
   if (/^-- migrate:autocommit/m.test(body)) {
     // ALTER TYPE … ADD VALUE cannot be used in the transaction that added it. Such files are

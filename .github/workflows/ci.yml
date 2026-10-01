@@ -111,7 +111,7 @@ jobs:
         with: { node-version: '${{ env.NODE_VERSION }}', cache: pnpm }
       # Critical blocks; high is reported and triaged.
       - run: pnpm audit --prod --audit-level critical
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           severity: CRITICAL
@@ -140,8 +140,12 @@ jobs:
         run: |
           docker build -t sidequest/postgres infra/postgres
           docker run -d --name pg -p 5432:5432 -e POSTGRES_PASSWORD=ci sidequest/postgres
-          for i in $(seq 1 60); do docker exec pg pg_isready -U postgres && break; sleep 1; done
-          docker exec pg psql -U postgres -c 'CREATE DATABASE sq_shadow'
+          # Wait on TCP, not the socket: during first-boot init the image runs a temporary
+          # server on the Unix socket only, then restarts. A socket check passes against that
+          # temporary server and the migration's TCP connection lands in the restart.
+          for i in $(seq 1 90); do docker exec pg pg_isready -h 127.0.0.1 -U postgres -q && break; sleep 1; done
+          docker exec pg pg_isready -h 127.0.0.1 -U postgres
+          docker exec pg psql -h 127.0.0.1 -U postgres -c 'CREATE DATABASE sq_shadow'
       - name: forward migrate
         run: pnpm migrate:up
         env:
@@ -196,7 +200,7 @@ jobs:
           image: sidequest/${{ matrix.name }}:${{ github.sha }}
           format: spdx-json
           artifact-name: sbom-${{ matrix.name }}.spdx.json
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: sidequest/${{ matrix.name }}:${{ github.sha }}
           severity: CRITICAL
