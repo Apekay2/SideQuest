@@ -14,15 +14,20 @@ export class ApiError extends Error {
 async function call<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown): Promise<T> {
   const token = (await cookies()).get(ACCESS)?.value;
   if (!token) redirect('/sign-in');
-  const res = await fetch(apiUrl() + path, {
-    method,
-    cache: 'no-store',
-    headers: {
-      authorization: `Bearer ${token}`,
-      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-    },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res: Response;
+  try {
+    res = await fetch(apiUrl() + path, {
+      method,
+      cache: 'no-store',
+      headers: {
+        authorization: `Bearer ${token}`,
+        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+      },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    throw new ApiError(503, 'API_UNREACHABLE', 'The SideQuest API is unreachable');
+  }
   // The proxy refreshes ahead of expiry; a 401 here means the session was revoked.
   if (res.status === 401) redirect('/sign-in?expired=1');
   const text = await res.text();

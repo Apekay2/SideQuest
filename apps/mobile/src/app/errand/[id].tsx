@@ -96,10 +96,15 @@ function RequesterView({ e, link }: { e: ErrandDetail; link: ReturnType<typeof u
 function Choosing({ e, onCancel }: { e: ErrandDetail; onCancel: () => void }) {
   const T = useT();
   const bids = useBids(e.id, true);
-  const nearby = useNearby(e.id, e.assignment_mode === 'pick');
+  const nearby = useNearby(e.id, e.assignment_mode === 'pick' || e.status === 'open');
   const award = useAction<{ bid_id: string }>(() => `/errands/${e.id}/award`, [['errand', e.id]]);
   const offer = useAction<{ runner_id: string; fee_cents: number }>(() => `/errands/${e.id}/offer`, [['errand', e.id]]);
+  const invite = useAction<{ runner_id: string; fee_cents: number }>(() => `/errands/${e.id}/invite`, [['errand', e.id]]);
+  const regulars = e.assignment_mode === 'pick' || e.status !== 'open'
+    ? []
+    : (nearby.data ?? []).filter((r) => r.completed_with_you > 0);
   const b = bids.data;
+  const actionError = [award.error, offer.error, invite.error].find((x) => x instanceof ApiError) as ApiError | undefined;
   return (
     <>
       <Eyebrow>{T('live.offers')}</Eyebrow>
@@ -133,7 +138,23 @@ function Choosing({ e, onCancel }: { e: ErrandDetail; onCancel: () => void }) {
           ))}
         </>
       ) : null}
-      {(award.error ?? offer.error) instanceof ApiError ? <Notice>{((award.error ?? offer.error) as ApiError).message}</Notice> : null}
+      {regulars.length > 0 ? (
+        <>
+          <Eyebrow style={{ marginTop: 6 }}>{T('live.regulars')}</Eyebrow>
+          <Meta>{T('live.regulars_body')}</Meta>
+          {regulars.map((r) => (
+            <SunkRow key={r.runner_id} accessibilityLabel={`${r.display_name}, ${T('live.done_with_you', { n: r.completed_with_you })}`}
+              onPress={invite.isPending ? undefined : () => invite.mutate({ body: { runner_id: r.runner_id, fee_cents: e.max_fee_cents } })}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: t.fontBody, fontSize: t.size.body, color: t.text }}>{r.display_name}</Text>
+                <Meta>{T('live.done_with_you', { n: r.completed_with_you })}</Meta>
+              </View>
+              <Text style={{ fontFamily: t.fontBodySemi, fontSize: t.size.body, color: t.accentDeep }}>{T('live.invite', { amount: kes(e.max_fee_cents, T.locale) })}</Text>
+            </SunkRow>
+          ))}
+        </>
+      ) : null}
+      {actionError ? <Notice>{actionError.message}</Notice> : null}
       <SecondaryButton style={{ flex: 0, marginTop: 8 }} label={T('live.cancel')} onPress={onCancel} />
     </>
   );
@@ -252,6 +273,9 @@ function RunnerView({ e }: { e: ErrandDetail }) {
       ) : null}
       {e.status === 'awarded' ? <PrimaryButton label={T('active.start')} loading={start.isPending} onPress={() => start.mutate({ body: {} })} /> : null}
       {e.status === 'en_route' ? <PrimaryButton label={T('active.arrive')} loading={arrive.isPending} onPress={() => arrive.mutate({ body: {} })} /> : null}
+      {(e.status === 'awarded' || e.status === 'en_route') && me?.entitlements.includes('batch.create') ? (
+        <SecondaryButton style={{ flex: 0 }} label={T('active.batch')} onPress={() => router.push(`/batch/${e.id}`)} />
+      ) : null}
       {(e.status === 'shopping' || e.status === 'awaiting_approval') ? e.stalls.map((s) => (
         <SunkRow key={s.id} onPress={() => router.push(`/run/${e.id}/${s.id}`)} accessibilityLabel={s.name}>
           <StallMark status={s.status} />
