@@ -12,6 +12,8 @@ import { useT } from '../../i18n/useT';
 import { api, ApiError } from '../../lib/api';
 import { useSession } from '../../lib/session';
 import { Heading, Body, Field, PrimaryButton, Chip, Eyebrow, Notice } from '../../components/ui';
+import { LegalConsent } from '../../components/LegalConsent';
+import { acceptance } from '../../lib/legal';
 
 export default function SignIn() {
   const T = useT();
@@ -25,6 +27,7 @@ export default function SignIn() {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<'requester' | 'runner'>('requester');
+  const [agreed, setAgreed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,11 +39,12 @@ export default function SignIn() {
   }
 
   async function verify() {
-    if (!challenge) return;
+    if (!challenge || !agreed) return;
     setBusy(true); setError(null);
     try {
       const s = await api.post<Session>('/auth/verify', {
         challenge_id: challenge.challenge_id, code, device_id: deviceId ?? undefined, role, display_name: name.trim() || undefined,
+        accept_legal: acceptance(),
       });
       await signedIn(s);
       router.replace(s.account.role === 'runner' ? '/feed' : '/home');
@@ -72,7 +76,9 @@ export default function SignIn() {
               <Chip label={T('auth.role_requester')} selected={role === 'requester'} onPress={() => setRole('requester')} />
               <Chip label={T('auth.role_runner')} selected={role === 'runner'} onPress={() => setRole('runner')} />
             </View>
-            <PrimaryButton label={T('auth.verify')} onPress={verify} loading={busy} disabled={code.length !== 6} />
+            <LegalConsent checked={agreed} onChange={setAgreed} />
+            <PrimaryButton label={T('auth.verify')} onPress={verify} loading={busy} disabled={code.length !== 6 || !agreed}
+              accessibilityLabel={agreed ? undefined : `${T('auth.verify')}. ${T('legal.required')}`} />
           </>
         )}
         {error ? <Notice>{error}</Notice> : null}

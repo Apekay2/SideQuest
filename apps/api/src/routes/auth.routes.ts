@@ -10,7 +10,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
-import { OtpRequest, OtpVerify, RefreshRequest, PatchMe, PushTokenBody, type Me, type Session } from '@sidequest/contracts';
+import { OtpRequest, OtpVerify, RefreshRequest, PatchMe, PushTokenBody, LegalAcceptance, LEGAL_VERSIONS, type Me, type Session } from '@sidequest/contracts';
 import { cleanMsisdn, cleanName, InvalidTextError } from '@sidequest/domain/text/sanitize';
 import { entitlementsFor, type Entitlement, type Tier } from '@sidequest/domain/kyc/entitlements';
 import { withActor, setScope, type Tx } from '@sidequest/db';
@@ -27,7 +27,26 @@ interface AccountRow {
   language: 'en' | 'sw'; market: string; staff_grants: string[]; suspended_at: Date | null;
 }
 
-export function toMe(a: AccountRow): Me {
+/** Whether the account has accepted the terms and privacy notice in force. Staff are not asked. */
+export async function legalCurrent(tx: Tx, account: Pick<AccountRow, 'id' | 'role'>): Promise<boolean> {
+  if (account.role === 'staff') return true;
+  const [r] = await tx<{ n: number }[]>`
+    SELECT count(*)::int AS n FROM legal_acceptance
+     WHERE account_id = ${account.id}
+       AND ((document = 'terms' AND version = ${LEGAL_VERSIONS.terms})
+         OR (document = 'privacy' AND version = ${LEGAL_VERSIONS.privacy}))`;
+  return r!.n === 2;
+}
+
+/** Record acceptance of the current documents (idempotent). The actor must be in scope. */
+async function recordAcceptance(tx: Tx, accountId: string) {
+  for (const [document, version] of Object.entries(LEGAL_VERSIONS)) {
+    await tx`INSERT INTO legal_acceptance (account_id, document, version, adult)
+             VALUES (${accountId}, ${document}, ${version}, true) ON CONFLICT DO NOTHING`;
+  }
+}
+
+export function toMe(a: AccountRow, legal: boolean): Me {
   return {
     id: a.id,
     display_name: a.display_name,
@@ -36,6 +55,7 @@ export function toMe(a: AccountRow): Me {
     entitlements: entitlementsFor(a.verification_tier as Tier, a.staff_grants as Entitlement[]),
     language: a.language,
     market: a.market,
+    legal_current: legal,
   };
 }
 
@@ -96,6 +116,12 @@ export default async function authRoutes(app: FastifyInstance) {
 
   app.post('/auth/verify', async (req, reply) => {
     const body = parse(OtpVerify, req.body);
+    // Present → must be the current versions with the 18+ confirmation; absent is allowed only
+    // for an existing account (checked below).
+    const accept = body.accept_legal === undefined ? null : LegalAcceptance.safeParse(body.accept_legal);
+    if (accept && !accept.success) {
+      throw new AppError(400, 'LEGAL_ACCEPTANCE_REQUIRED', 'Accept the current terms and privacy notice, and confirm you are 18 or older');
+    }
 
     const challenge = await withActor(sql, null, async (tx) => {
       const [c] = await tx<{ msisdn: string; code_hash: string; attempts: number; expires_at: Date; consumed_at: Date | null }[]>`
@@ -143,6 +169,11 @@ export default async function authRoutes(app: FastifyInstance) {
         throw new AppError(403, 'NOT_STAFF', 'This number has no console access');
       }
       if (!account) {
+        // No contract without agreement: an account is created only with the current terms
+        // and privacy notice accepted, by someone who confirms they are an adult.
+        if (!accept) {
+          throw new AppError(400, 'LEGAL_ACCEPTANCE_REQUIRED', 'Accept the current terms and privacy notice, and confirm you are 18 or older');
+        }
         let displayName = 'Mwanachama';
         if (body.display_name) {
           try { displayName = cleanName('display_name', body.display_name); } catch (e) {
@@ -156,6 +187,10 @@ export default async function authRoutes(app: FastifyInstance) {
       }
       if (account!.suspended_at) throw new AppError(403, 'ACCOUNT_SUSPENDED', 'This account is suspended. Contact support.');
 
+      if (accept && account!.role !== 'staff') {
+        await setScope(tx, 'app.actor_id', account!.id);
+        await recordAcceptance(tx, account!.id);
+      }
       return issueSession(tx, account!, body.device_id ?? null, null);
     }, { otpChallengeId: body.challenge_id });
 
@@ -172,14 +207,16 @@ export default async function authRoutes(app: FastifyInstance) {
       VALUES (${account.id}, ${hash}, ${null}, ${deviceId}, ${expires},
               ${familyId ?? randomUUID()})
       RETURNING id`;
+    const legal = await legalCurrent(tx, account);
     const access = await signAccess(cfg.JWT_SECRET, cfg.JWT_TTL_SECONDS, {
       accountId: account.id,
       role: account.role,
       tier: account.verification_tier as Tier,
       staffGrants: account.role === 'staff' ? account.staff_grants : [],
       sessionId: s!.id,
+      legal,
     });
-    return { access, refresh: token, expires_in: cfg.JWT_TTL_SECONDS, account: toMe(account) };
+    return { access, refresh: token, expires_in: cfg.JWT_TTL_SECONDS, account: toMe(account, legal) };
   }
 
   // ─────────────────────────────────────────── POST /auth/refresh
@@ -263,7 +300,21 @@ export default async function authRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 
-  app.get('/me', { preHandler: app.requireAuth }, async (req) => toMe(await app.tx(req, (tx) => loadMe(req, tx))));
+  app.get('/me', { preHandler: app.requireAuth }, async (req) => app.tx(req, async (tx) => {
+    const a = await loadMe(req, tx);
+    return toMe(a, await legalCurrent(tx, a));
+  }));
+
+  /**
+   * Accept the terms and privacy notice in force (after they change). The client then refreshes
+   * its session, whose new access token carries the acceptance.
+   */
+  app.post('/me/legal', { preHandler: [app.requireAuth, app.limit(LIMITS.writes)] }, async (req, reply) => {
+    parse(LegalAcceptance, req.body);
+    if (req.actor!.role === 'staff') return reply.code(204).send();
+    await app.tx(req, (tx) => recordAcceptance(tx, req.actor!.id));
+    return reply.code(204).send();
+  });
 
   app.patch('/me', { preHandler: app.requireAuth }, async (req: FastifyRequest, reply: FastifyReply) => {
     const body = parse(PatchMe, req.body);
@@ -282,9 +333,10 @@ export default async function authRoutes(app: FastifyInstance) {
           role         = COALESCE(${body.role ?? null}::actor_role, role),
           updated_at   = now()
          WHERE id = ${req.actor!.id}`;
-      return loadMe(req, tx);
+      const a = await loadMe(req, tx);
+      return { a, legal: await legalCurrent(tx, a) };
     });
     // A role switch changes the token's claims; the client refreshes to pick them up.
-    return reply.send({ ...toMe(me), refresh_required: Boolean(body.role && body.role !== req.actor!.role) });
+    return reply.send({ ...toMe(me.a, me.legal), refresh_required: Boolean(body.role && body.role !== req.actor!.role) });
   });
 }

@@ -1,15 +1,20 @@
-// Shared by both modes: language (EN/SW), mode switch, verification, sign-out.
+// Shared by both modes: language (EN/SW), mode switch, verification, sign-out, and the
+// privacy rights the law gives every user: their documents, location consent, a copy of their
+// data, and closing the account (Kenya DPA 2019 s.26; App Store and Google Play deletion rules).
 
-import { View } from 'react-native';
+import { useState } from 'react';
+import { Linking, Share, View } from 'react-native';
 import { router } from 'expo-router';
-import { useQueryClient } from '@tanstack/react-query';
-import type { Me } from '@sidequest/contracts';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { LocationConsent, Me } from '@sidequest/contracts';
 import { useT } from '../../i18n/useT';
-import { api, restoreSession } from '../../lib/api';
+import { api, ApiError, newIdemKey, restoreSession } from '../../lib/api';
+import { TERMS_URL, PRIVACY_URL } from '../../lib/legal';
 import { useSession } from '../../lib/session';
 import { unregisterPush } from '../../lib/push';
 import { useKyc } from '../../features/errands/hooks';
 import { Screen } from '../../components/Screen';
+import { ConfirmDestructive } from '../../components/ConfirmDestructive';
 import { Card, Chip, Eyebrow, Heading, Meta, PrimaryButton, SecondaryButton, Notice } from '../../components/ui';
 
 export function ProfileScreen() {
@@ -19,7 +24,43 @@ export function ProfileScreen() {
   const setAccount = useSession((s) => s.setAccount);
   const signOut = useSession((s) => s.signOut);
   const kyc = useKyc();
+  const tier3 = me?.verification_tier === 3;
+  const consent = useQuery({ queryKey: ['location-consent'], enabled: tier3,
+    queryFn: () => api.get<LocationConsent>('/me/location-consent') });
+  const setConsent = useMutation({
+    mutationFn: (v: boolean) => api.post('/me/location-consent', { consent: v }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['location-consent'] }),
+  });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   if (!me) return null;
+
+  const failure = (e: unknown) => {
+    const code = e instanceof ApiError ? e.code : '';
+    if (code === 'ACCOUNT_HAS_BALANCE') return T('privacy.delete_balance');
+    if (code === 'LIVE_ERRANDS') return T('privacy.delete_live');
+    if (code === 'OPEN_DISPUTE') return T('privacy.delete_dispute');
+    return T('error.generic');
+  };
+
+  async function exportData() {
+    setBusy(true); setNotice(null);
+    try {
+      const data = await api.get<unknown>('/me/export');
+      await Share.share({ title: T('privacy.export_title'), message: JSON.stringify(data, null, 2) });
+    } catch (e) { setNotice(failure(e)); }
+    finally { setBusy(false); }
+  }
+
+  async function deleteAccount() {
+    setConfirmDelete(false); setBusy(true); setNotice(null);
+    try {
+      await api.post('/me/delete', { confirm: 'DELETE' }, { idem: newIdemKey() });
+      await unregisterPush().catch(() => undefined);
+      await signOut(); qc.clear(); router.replace('/sign-in');
+    } catch (e) { setNotice(failure(e)); setBusy(false); }
+  }
   const target = me.role === 'runner' ? 3 : Math.min(me.verification_tier + 1, 3);
 
   async function patch(body: Partial<Pick<Me, 'language' | 'role'>>) {
@@ -61,6 +102,29 @@ export function ProfileScreen() {
           await unregisterPush(); await signOut(); qc.clear(); router.replace('/sign-in');
         }} />
       </View>
+
+      <Eyebrow style={{ marginTop: 18 }}>{T('privacy.title')}</Eyebrow>
+      {tier3 && consent.data && consent.data.consent !== null ? (
+        <Card>
+          <Meta>{T('privacy.location_body')}</Meta>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+            <Chip label={T('privacy.location_on')} selected={consent.data.consent} onPress={() => setConsent.mutate(true)} />
+            <Chip label={T('privacy.location_off')} selected={!consent.data.consent} onPress={() => setConsent.mutate(false)} />
+          </View>
+        </Card>
+      ) : null}
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        <SecondaryButton label={T('legal.terms')} onPress={() => Linking.openURL(TERMS_URL)} />
+        <SecondaryButton label={T('legal.privacy')} onPress={() => Linking.openURL(PRIVACY_URL)} />
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        <SecondaryButton label={T('privacy.export')} onPress={exportData} disabled={busy} />
+        {me.role !== 'staff' ? <SecondaryButton label={T('privacy.delete')} onPress={() => setConfirmDelete(true)} disabled={busy} /> : null}
+      </View>
+      {notice ? <Notice>{notice}</Notice> : null}
+      <ConfirmDestructive visible={confirmDelete} title={T('privacy.delete_title')} body={T('privacy.delete_body')}
+        confirmLabel={T('privacy.delete_confirm')} cancelLabel={T('privacy.delete_cancel')}
+        onConfirm={deleteAccount} onCancel={() => setConfirmDelete(false)} />
     </Screen>
   );
 }

@@ -164,6 +164,28 @@ Checked and found sound:
 - a withdrawal racing an errand funding (the worker re-checks under the same lock)
 - token storage on device (keychain, this device only; memory only on web)
 
+## Legal compliance
+
+What the law and the app stores require of the software is built in. The full list, and what
+only the business can do (ODPC registration, payments authorisation, advocate-reviewed texts),
+is in [RELEASE.md §6](RELEASE.md#6-legal-obligations).
+
+| Obligation | Where |
+|---|---|
+| Agreement to the Terms and Privacy Notice, with 18+ confirmation, before an account exists | sign-in checkbox → `legal_acceptance` (0010) |
+| Agreement again when either changes: until then reads work, writes are refused (`LEGAL_ACCEPTANCE_REQUIRED`), SOS never is | `LEGAL_VERSIONS`, the `lg` token claim, the `LegalUpdate` screen |
+| Access and portability (DPA s.26) | `GET /me/export`, Profile → Download my data |
+| Erasure, in-app (DPA s.26, Play and App Store rules) | `POST /me/delete` → `app_erase_self()`; refused while money is held, an errand is live or a dispute is open |
+| Location consent, explicit, timestamped and revocable | `/me/location-consent`, Profile; streaming stops when withdrawn |
+| Retention schedule | worker `retention` → `app_retention_purge()` (0011), stored files included |
+
+Erasure deletes the ID documents, sessions, push tokens and location, and replaces the name
+and number. It keeps the ledger, payments and rulings, which tax and payment law require,
+against the same account id, now pseudonymised. A deleted user's access token keeps working
+for reads until it expires (minutes); money paths check the revoked session at once.
+
+`tests/e2e/legal.test.ts` and `tests/e2e/privacy.test.ts` cover each row.
+
 ## Going live
 
 [RELEASE.md](RELEASE.md) is the launch guide, in order:

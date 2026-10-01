@@ -21,7 +21,7 @@ the next starts.
 | Postgres 16 with PostGIS **and h3** | managed or self-run | the database | `*_DATABASE_URL` |
 | Redis 7 | managed | queues, rate limits, live updates | `REDIS_URL` |
 | Domains and TLS | DNS provider | `api.` and `console.` hosts, at minimum | `API_PUBLIC_ORIGIN`, `ALLOWED_ORIGINS` |
-| Privacy policy and terms URLs | your site | store listings; the app collects location, camera and ID documents | store listings |
+| Terms and Privacy Notice, reviewed by a Kenyan advocate | your site | sign-up consent, store listings (§6) | `EXPO_PUBLIC_TERMS_URL`, `EXPO_PUBLIC_PRIVACY_URL` |
 
 h3 is not offered by every managed Postgres. Check before choosing, or run `infra/postgres`
 (PostGIS + h3) yourself with backups and point-in-time recovery.
@@ -133,7 +133,60 @@ Have these answers ready for the store questionnaires:
 - **Identity documents:** KYC, encrypted at rest, reviewed by staff.
 - **Payments:** M-Pesa, with no card data stored on the device.
 
-## 6. Before opening the doors
+## 6. Legal obligations
+
+The code carries what software can:
+- recorded, versioned acceptance of the Terms and Privacy Notice with an 18+ confirmation
+- re-acceptance when either changes
+- in-app account deletion and a data export
+- revocable, timestamped location consent
+- a retention schedule
+
+The rest needs the business and a Kenyan advocate. This is a checklist, not legal advice.
+
+**Before taking a single real shilling**
+- [ ] **Terms of Service and Privacy Notice, written and reviewed by a Kenyan advocate.**
+  - Publish them at the URLs the app links to: `EXPO_PUBLIC_TERMS_URL` and `EXPO_PUBLIC_PRIVACY_URL` (defaults `https://sidequest.co.ke/terms` and `/privacy`).
+  - They must describe what the code does: the data collected, the retention periods below, erasure and its limits, location sharing, and KYC.
+- [ ] **Each time either document changes,** bump its date in `LEGAL_VERSIONS` (`packages/contracts`). Everyone is then asked to agree again before their next change of data. The old texts stay archived at stable URLs, because acceptance rows point to them by date.
+- [ ] **Register with the Office of the Data Protection Commissioner (ODPC)** as both data controller and data processor, under the Data Protection (Registration) Regulations 2021.
+  - Appoint a Data Protection Officer, or designate the person who answers requests.
+  - Run a Data Protection Impact Assessment. Location tracking and ID documents are high-risk processing.
+- [ ] **Payments authorisation.** Holding customer money in a wallet and escrow is a payment service under the National Payment System Act 2011.
+  - Either obtain Central Bank of Kenya authorisation, or structure the flow through a licensed partner: the M-Pesa paybill holder and a trust/escrow account.
+  - Settle this before go-live; it decides who holds the float.
+- [ ] **KRA:** PIN, and VAT and digital service tax on the platform's fees as they apply. Payment and ledger records are kept 7 years (Tax Procedures Act); erasure deliberately keeps them, pseudonymised.
+- [ ] **Runner relationship.** The Terms must say whether runners are independent contractors, and how fees, tips and the spend card work. Have the advocate check it against the Employment Act and recent gig-work rulings.
+- [ ] **Data held outside Kenya** (R2, any non-Kenyan hosting) needs the safeguards in DPA s.48–50 and the 2021 General Regulations. Record them in the Privacy Notice.
+
+**For the stores**
+- [ ] Google Play **Data safety** form and Apple **App Privacy** labels. They must match:
+  - location (precise, during errands only)
+  - phone number, name, photos, government ID
+  - payment info (M-Pesa number)
+  - none of it sold or used for advertising
+- [ ] Google Play needs a **web page for account deletion** for people without the app. Point it at a form or an email that support actions through the console, or at the app. In-app deletion is `Profile → Delete account`.
+- [ ] Age rating: the Terms require 18+, so declare it. The rating questionnaires should say the app involves real-money payments.
+
+**Retention, as enforced by the worker** (state these periods in the Privacy Notice)
+
+| Data | Kept | Then |
+|---|---|---|
+| Live location points | 30 days | point removed; the coarse cell stays |
+| Chat messages | 1 year | deleted, unless the errand is disputed |
+| Errand photos (goods, receipts, handover) | 2 years | deleted with the stored file, unless disputed |
+| Rejected or expired KYC | 90 days after review | case and documents deleted |
+| Approved KYC | while the account is open | deleted at account deletion |
+| Ledger, payments, rulings | 7 years (tax law) | kept on deletion, against a pseudonymised account |
+| Acceptance records | as long as the contract and claims under it | kept as proof of consent |
+
+**Requests from people**
+- **Access and portability:** `Profile → Download my data` (`GET /me/export`).
+- **Erasure:** `Profile → Delete account` (`POST /me/delete`). It is refused while money is held, an errand is live, or a dispute is open, and says why. Answer requests by email within the statutory window (DPA s.26; 30 days under the regulations).
+- **Correction:** name and language in the app; anything else by support.
+- **Breach notification:** to the ODPC within 72 hours of becoming aware (DPA s.43). Keep an incident runbook and a named owner.
+
+## 7. Before opening the doors
 
 - [ ] `pnpm verify` and CI green on the release commit
 - [ ] Database backups with point-in-time recovery, restore tested once
@@ -142,3 +195,4 @@ Have these answers ready for the store questionnaires:
       operating hours
 - [ ] Review-login variables unset after store approval
 - [ ] Performance targets measured on real devices (not yet measured; see README)
+- [ ] Every item in §6 done: ODPC registration, payments authorisation, published and reviewed Terms and Privacy Notice

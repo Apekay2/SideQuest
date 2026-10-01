@@ -107,7 +107,8 @@ export default async function kycRoutes(app: FastifyInstance) {
       }
       const [row] = await tx<CaseRow[]>`
         UPDATE kyc_case SET status = 'submitted', id_number_enc = ${idEnc}, next_of_kin_enc = ${kinEnc},
-               movement_consent = ${c.target_tier === 3 ? true : c.movement_consent}
+               movement_consent = ${c.target_tier === 3 ? true : c.movement_consent},
+               movement_consent_at = ${c.target_tier === 3 ? new Date() : null}
          WHERE id = ${id} RETURNING *`;
       return row!;
     });

@@ -40,6 +40,7 @@ import opsRoutes from './routes/ops.routes.js';
 import opsAdminRoutes from './routes/ops-admin.routes.js';
 import webhookRoutes from './routes/webhooks.routes.js';
 import uploadRoutes from './routes/uploads.routes.js';
+import privacyRoutes from './routes/privacy.routes.js';
 import realtime from './realtime/ws.js';
 
 import './types.js';
@@ -102,6 +103,7 @@ export async function build(deps: Deps): Promise<FastifyInstance> {
 
   await app.register(healthRoutes);
   await app.register(authRoutes);
+  await app.register(privacyRoutes);
   await app.register(kycRoutes);
   await app.register(errandRoutes);
   await app.register(assignmentRoutes);

@@ -32,7 +32,7 @@ const hourly = setInterval(() => {
       ticket: async (f) => logger.error({ findings: f }, 'reconciliation ticket'),
     }));
   }
-  void once(`retention:${now.toISOString().slice(0, 13)}`, 3600, () => retention(deps.sql));
+  void once(`retention:${now.toISOString().slice(0, 13)}`, 3600, () => retention(deps.sql, deps.storage));
 }, 60_000);
 
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {

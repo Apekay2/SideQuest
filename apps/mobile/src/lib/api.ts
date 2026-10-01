@@ -81,6 +81,10 @@ async function request<T>(method: string, path: string, body?: unknown, opts: Re
   const json = text ? JSON.parse(text) : null;
   if (!res.ok) {
     const p = json as Problem | null;
+    // The terms changed since this person last accepted: the root layout shows LegalUpdate.
+    if (res.status === 403 && p?.code === 'LEGAL_ACCEPTANCE_REQUIRED' && s.account) {
+      useSession.getState().setAccount({ ...s.account, legal_current: false });
+    }
     throw new ApiError(res.status, p?.code ?? 'UNKNOWN', p?.title ?? 'Request failed', p?.details);
   }
   return json as T;

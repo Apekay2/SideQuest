@@ -17,6 +17,7 @@ import { useSession } from '../lib/session';
 import { restoreSession, isNetworkError } from '../lib/api';
 import { startRealtime } from '../lib/realtime';
 import { registerPush, errandFromNotification } from '../lib/push';
+import { LegalUpdate } from '../screens/LegalUpdate';
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -30,6 +31,7 @@ export default function Root() {
   const hydrate = useSession((s) => s.hydrate);
   const access = useSession((s) => s.access);
   const [restored, setRestored] = useState(false);
+  const legalOutdated = useSession((s) => Boolean(s.access) && s.account?.legal_current === false);
 
   useEffect(() => { hydrate().then(() => restoreSession()).finally(() => setRestored(true)); }, [hydrate]);
   useEffect(() => (access ? startRealtime(qc) : undefined), [access]);
@@ -69,6 +71,7 @@ export default function Root() {
           <Stack.Screen name="chat/[id]" />
           <Stack.Screen name="kyc" />
         </Stack>
+        {legalOutdated ? <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}><LegalUpdate /></View> : null}
       </QueryClientProvider>
     </SafeAreaProvider>
   );

@@ -8,7 +8,7 @@ import type { Sql, Tx } from '@sidequest/db';
 import type { Config } from '@sidequest/config';
 import type { IssuerPort } from '@sidequest/domain/card/issuer.port';
 import type { MpesaPort } from '@sidequest/domain/rails/mpesa.port';
-import type { SmsPort, PushPort } from '@sidequest/adapters';
+import type { SmsPort, PushPort, StoragePort } from '@sidequest/adapters';
 import { ledgerBalance, enqueueOutbox } from '@sidequest/db';
 import type { Logger } from '@sidequest/observability';
 
@@ -20,6 +20,8 @@ export interface WorkerDeps {
   mpesa: MpesaPort;
   sms: SmsPort;
   push: PushPort;
+  /** Deletes stored objects the retention schedule has expired. */
+  storage: StoragePort;
 }
 
 export interface JobContext {

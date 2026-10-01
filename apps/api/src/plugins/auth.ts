@@ -20,11 +20,12 @@ export interface TokenInput {
   tier: Tier;
   staffGrants: readonly string[];
   sessionId: string;
+  legal?: boolean;
 }
 
 export async function signAccess(secret: string, ttlSeconds: number, t: TokenInput): Promise<string> {
   const ent = entitlementsFor(t.tier, t.staffGrants as Entitlement[]);
-  return new SignJWT({ role: t.role, tier: t.tier, ent, sid: t.sessionId })
+  return new SignJWT({ role: t.role, tier: t.tier, ent, sid: t.sessionId, lg: Boolean(t.legal) })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(t.accountId)
     .setIssuer(ISSUER)
@@ -53,6 +54,7 @@ export async function verifyAccess(key: Uint8Array, token: string): Promise<{ ac
       tier: Number(payload.tier) as Actor['tier'],
       entitlements: Array.isArray(payload.ent) ? (payload.ent as string[]) : [],
       sessionId: String(payload.sid),
+      legal: payload.lg === true,
     },
     exp: Number(payload.exp),
   };
@@ -81,6 +83,20 @@ export default fp(async function auth(app: FastifyInstance) {
     } catch {
       throw new AppError(401, 'UNAUTHENTICATED', 'Sign in again');
     }
+  });
+
+  // Agreement before action: until the person has accepted the terms and privacy notice in
+  // force, nothing that changes data runs. Reading still works, so they can see their errands
+  // and money. Exempt: signing in and out, accepting, closing the account, and SOS — a safety
+  // call is never held behind paperwork. Staff are not party to the consumer terms.
+  const LEGAL_EXEMPT = new Set(['/me/legal', '/me/delete', '/me/push-token', '/me/location-consent', '/errands/:id/sos']);
+  app.addHook('preHandler', async (req) => {
+    const a = req.actor;
+    if (!a || a.legal || a.role === 'staff') return;
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return;
+    const route = req.routeOptions.url ?? '';
+    if (route.startsWith('/auth/') || LEGAL_EXEMPT.has(route)) return;
+    throw new AppError(403, 'LEGAL_ACCEPTANCE_REQUIRED', 'Accept the updated terms and privacy notice to continue');
   });
 
   app.decorate('requireAuth', async (req) => {

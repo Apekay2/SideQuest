@@ -2,6 +2,7 @@
 // every OTP limit, and never reaches the ops console.
 
 import { beforeAll, afterAll, beforeEach, describe, expect, test } from 'vitest';
+import { LEGAL_VERSIONS } from '@sidequest/contracts';
 import { World } from './world.js';
 
 let w: World;
@@ -21,7 +22,7 @@ describe('app-review sign-in', () => {
     const otp = await anon.post('/auth/otp', { msisdn: '0700000123' }, { idem: false });
     expect(otp.status).toBe(201);
     expect(w.sms().outbox.length).toBe(before);
-    const v = await anon.post('/auth/verify', { challenge_id: otp.body.challenge_id, code: '482915', role: 'requester', display_name: 'App Review' }, { idem: false });
+    const v = await anon.post('/auth/verify', { challenge_id: otp.body.challenge_id, code: '482915', role: 'requester', display_name: 'App Review', accept_legal: { ...LEGAL_VERSIONS, adult: true } }, { idem: false });
     expect(v.status).toBe(200);
     expect(v.body.account.role).toBe('requester');
   });
