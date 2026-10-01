@@ -86,7 +86,11 @@ export class MockIssuer implements IssuerPort {
     const prior = await this.redis.get(this.k('load', args.idemKey));
     if (!prior) return { status: 'unknown' as const };
     const r = JSON.parse(prior) as LoadResult;
-    return r.ok ? { status: 'succeeded' as const, providerRef: r.providerRef } : { status: 'failed' as const, code: r.code };
+    // `in` narrows the union even when strictNullChecks is off (Vercel's function type-check
+    // does not use our tsconfig); a truthiness check on `r.ok` does not.
+    return 'providerRef' in r
+      ? { status: 'succeeded' as const, providerRef: r.providerRef }
+      : { status: 'failed' as const, code: r.code };
   }
 
   async getBalance(issuerRef: string): Promise<Cents> {
