@@ -42,3 +42,36 @@ export const ERRAND_KIND: Record<string, string> = {
 };
 
 export const label = (map: Record<string, string>, key: string) => map[key] ?? key.replace(/_/g, ' ');
+
+export const ERRAND_STATUS: Record<string, string> = {
+  draft: 'Draft', open: 'Open', awaiting_funds: 'Awaiting funds', offered: 'Offered', awarded: 'Assigned',
+  en_route: 'On the way', shopping: 'Shopping', awaiting_approval: 'Waiting on approval', handover: 'Handover',
+  settled: 'Settled', cancelled: 'Cancelled', disputed: 'Disputed', expired: 'Expired',
+};
+
+/** Pill tone for an errand status: live work warm, finished sage, stopped sand. */
+export function statusTone(status: string): '' | 'sage' | 'sand' | 'strong' {
+  if (status === 'settled') return 'sage';
+  if (status === 'disputed') return 'strong';
+  if (['cancelled', 'expired', 'draft'].includes(status)) return 'sand';
+  return '';
+}
+
+export const STAFF_GRANT_LABEL: Record<string, string> = {
+  'ops.read': 'Read operations',
+  'kyc.review': 'Review KYC',
+  'evidence.view': 'View evidence and chats',
+  'ledger.read': 'Read the ledger',
+  'location.read_cells': 'Read coarse locations',
+  'audit.read': 'Read audit trails',
+  'legal_ops': 'Rule on disputes, void cards',
+  'accounts.manage': 'Suspend and reinstate',
+  'staff.admin': 'Manage staff access',
+};
+
+export const LEDGER_ACCOUNT: Record<string, string> = {
+  user_wallet: 'Customer wallets', escrow_hold: 'Escrow', errand_card_float: 'Card float',
+  platform_fee: 'Platform fee', runner_earnings: 'Runner earnings', vendor_paid: 'Paid to vendors',
+  reimbursement_due: 'Reimbursements due', mpesa_settlement: 'M-Pesa settlement',
+  service_fee_requester: 'Requester service fee', maintenance_fee_runner: 'Runner maintenance fee',
+};

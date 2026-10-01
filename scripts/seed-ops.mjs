@@ -19,7 +19,7 @@ const SAND = [235, 221, 197], SAGE = [122, 138, 94], CLAY = [198, 113, 57];
 // ── the officer
 const officer = await signIn('0711000009', 'requester', 'L. Mutiso');
 sql(`UPDATE account SET role = 'staff',
-       staff_grants = ARRAY['ops.read','kyc.review','evidence.view','ledger.read','location.read_cells','audit.read','legal_ops']
+       staff_grants = ARRAY['ops.read','kyc.review','evidence.view','ledger.read','location.read_cells','audit.read','legal_ops','accounts.manage','staff.admin']
      WHERE id = '${officer.account.id}'`);
 
 // ── a KYC case: a runner asking for tier 3
