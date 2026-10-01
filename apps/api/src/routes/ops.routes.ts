@@ -226,7 +226,9 @@ export default async function opsRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post('/ops/cards/:id/void', { preHandler: gate('ops.read') }, async (req) => {
+  // Voiding a live card strands a runner mid-errand: a decision, not a read. Same entitlement
+  // as a ruling, never ops.read.
+  app.post('/ops/cards/:id/void', { preHandler: gate('legal_ops') }, async (req) => {
     const { id } = ids(req.params, 'id');
     await app.opsTx(req, async (tx) => {
       const [c] = await tx<{ errand_id: string }[]>`SELECT errand_id FROM card WHERE id = ${id}`;

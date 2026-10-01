@@ -45,14 +45,18 @@ Sign in to the app as `0711000001` (requester) or `0711000002` (runner), and to 
 `0711000009`. The seeds go through the real API; the only SQL they run is the promotion an
 administrator would do by hand. Seeded photos are plain colour blocks.
 
+**Production config.** `.env.example` lists every variable the config validates, shaped for
+production. Boot refuses placeholders, reused secrets and every development driver.
+
 **Docker.** `docker compose up --build` runs Postgres (with h3), Redis, a one-off migration
 job, the API, the worker and the console from this repo's images. It reads the same `.env`.
 
 ## Check it
 
 ```sh
+pnpm verify           # all of the below except the DB gates, then a full build
 pnpm typecheck        # every package, mobile included
-pnpm test             # unit + mobile (iOS and Android presets) + e2e: 207 tests
+pnpm test             # unit + mobile (iOS and Android presets) + e2e
 pnpm lint:parity      # Platform branching only in src/platform; en/sw keys and {placeholders} match
 DATABASE_URL=<owner url> pnpm db:gates   # RLS coverage, currency invariants, append-only ledger
 ```
@@ -132,6 +136,33 @@ they were found. Each fix has a test or a gate, so a regression goes red.
   40 characters.
 - **Money trace:** added per 05 §5.6, as the page that answers "where is the money". The rulings
   log gains a Split column.
+
+## Security audit
+
+A pass over auth, sessions, webhooks, uploads, ops access, money paths and the clients found
+seven issues. Each is fixed and has a regression test in `tests/e2e/audit.test.ts`. The
+socket test was confirmed to fail with its fix removed.
+
+| # | Finding | Fix |
+|---|---|---|
+| 1 | The WebSocket checked only the token's signature. A logged-out or revoked session kept a live socket, including the counterpart's location fixes, indefinitely. | The session row is checked at sign-in and every minute after. The socket closes at token expiry, and the app refreshes and reconnects. |
+| 2 | With the fake M-Pesa driver, the Daraja routes accepted posts from anyone outside production. | With the fake driver they accept nothing; it never calls them. |
+| 3 | The cross-site write check matched origins by prefix (`https://console…` let `https://console….evil.net` through). | Whole-origin comparison; a Referer is reduced to its origin first. |
+| 4 | The 256 KB body ceiling also applied to signed upload PUTs, so real photos failed. | Upload PUTs use their own 8 MB route limit. JSON keeps 256 KB. |
+| 5 | Withdrawals already debited were reserved again, hiding available balance. | Only undebited (`initiated`) withdrawals are reserved. |
+| 6 | Daraja callbacks rested on the source-IP allowlist alone. | A secret path token (`DARAJA_CALLBACK_TOKEN`, required for live M-Pesa), compared in constant time and redacted from logs, along with upload signatures. |
+| 7 | Voiding a live card needed only `ops.read`. | It now needs `legal_ops`. |
+
+Checked and found sound:
+- OTP limits and lockout
+- refresh rotation, with reuse revocation on both clients
+- idempotency
+- RLS on every route; the only raw SQL is in the migrator
+- upload signing and path containment
+- location consent and link gating
+- the handover QR
+- a withdrawal racing an errand funding (the worker re-checks under the same lock)
+- token storage on device (keychain, this device only; memory only on web)
 
 ## Known limits
 

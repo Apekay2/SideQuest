@@ -14,6 +14,7 @@
     "@sidequest/contracts": "workspace:*",
     "@sidequest/db": "workspace:*",
     "@sidequest/domain": "workspace:*",
+    "@sidequest/observability": "workspace:*",
     "@sidequest/worker": "workspace:*",
     "ioredis": "^6.0.0",
     "postgres": "^3.4.9"

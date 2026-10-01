@@ -135,6 +135,8 @@ export interface DarajaConfig {
   initiator: string;
   securityCredential: string;
   callbackBase: string;
+  /** Secret path segment; see DARAJA_CALLBACK_TOKEN. */
+  callbackToken: string;
 }
 
 export class Daraja implements MpesaPort {
@@ -191,7 +193,7 @@ export class Daraja implements MpesaPort {
       PartyA: phone,
       PartyB: this.cfg.shortcode,
       PhoneNumber: phone,
-      CallBackURL: `${this.cfg.callbackBase}/webhooks/daraja/stk`,
+      CallBackURL: `${this.cfg.callbackBase}/webhooks/daraja/${this.cfg.callbackToken}/stk`,
       AccountReference: args.accountRef.slice(0, 12),
       TransactionDesc: args.description.slice(0, 13),
     });
@@ -210,8 +212,8 @@ export class Daraja implements MpesaPort {
       PartyB: args.tillNumber,
       AccountReference: args.reference.slice(0, 12),
       Remarks: 'Side Qwest stall',
-      QueueTimeOutURL: `${this.cfg.callbackBase}/webhooks/daraja/timeout`,
-      ResultURL: `${this.cfg.callbackBase}/webhooks/daraja/b2c/result`,
+      QueueTimeOutURL: `${this.cfg.callbackBase}/webhooks/daraja/${this.cfg.callbackToken}/timeout`,
+      ResultURL: `${this.cfg.callbackBase}/webhooks/daraja/${this.cfg.callbackToken}/b2c/result`,
       OriginatorConversationID: `till:${args.idemKey}`,
     });
     return { conversationId: json.ConversationID };
@@ -227,8 +229,8 @@ export class Daraja implements MpesaPort {
       PartyA: this.cfg.shortcode,
       PartyB: args.msisdn.replace('+', ''),
       Remarks: args.remarks.slice(0, 100),
-      QueueTimeOutURL: `${this.cfg.callbackBase}/webhooks/daraja/timeout`,
-      ResultURL: `${this.cfg.callbackBase}/webhooks/daraja/b2c/result`,
+      QueueTimeOutURL: `${this.cfg.callbackBase}/webhooks/daraja/${this.cfg.callbackToken}/timeout`,
+      ResultURL: `${this.cfg.callbackBase}/webhooks/daraja/${this.cfg.callbackToken}/b2c/result`,
       Occasion: 'SideQwest',
     });
     return { conversationId: json.ConversationID };

@@ -14,13 +14,15 @@ function wholeShillings(amount: number) {
   if (amount % 100 !== 0) throw new AppError(400, 'VALIDATION', 'M-Pesa amounts must be whole shillings');
 }
 
-/** Money already promised out of an account but not yet posted: pending payouts/withdrawals. */
+/** Money promised out of an account but not yet posted to the ledger. A withdrawal is posted
+ *  (debited) when the worker moves it to 'pending', so only 'initiated' ones are still owed —
+ *  counting 'pending' too subtracted them twice. */
 async function reserved(tx: Tx, accountId: string, kind: 'payout' | 'withdraw'): Promise<number> {
   const [r] = kind === 'payout'
     ? await tx<{ n: number }[]>`SELECT COALESCE(sum(amount_cents), 0)::bigint AS n FROM payout
                                  WHERE runner_id = ${accountId} AND status = 'queued'`
     : await tx<{ n: number }[]>`SELECT COALESCE(sum(amount_cents), 0)::bigint AS n FROM payment
-                                 WHERE account_id = ${accountId} AND direction = 'out' AND status IN ('initiated','pending')`;
+                                 WHERE account_id = ${accountId} AND direction = 'out' AND status = 'initiated'`;
   return r!.n;
 }
 

@@ -91,6 +91,10 @@ const Env = z.object({
   DARAJA_B2C_INITIATOR: z.string().min(1).optional(),
   DARAJA_B2C_CREDENTIAL: secret(32).optional(),
   DARAJA_CALLBACK_BASE: z.string().url().optional(),
+  /** Secret path segment in every callback URL we hand Safaricom. Daraja does not sign its
+   *  callbacks, so this and the source allowlist are what stand between a forged confirmation
+   *  and the money path (the worker's match against initiated payments is the third). */
+  DARAJA_CALLBACK_TOKEN: secret(32).optional(),
   /** Safaricom source ranges. Callbacks from anywhere else are dropped before signature
    *  verification, so a forged confirmation never reaches the money path. */
   DARAJA_SOURCE_CIDRS: z.string().default('').transform((s) => s.split(',').map((x) => x.trim()).filter(Boolean)),
@@ -152,7 +156,7 @@ const Env = z.object({
   };
   need(v.STORAGE_DRIVER === 'r2', ['R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET'], 'STORAGE_DRIVER=r2');
   need(v.DARAJA_DRIVER === 'daraja', ['DARAJA_CONSUMER_KEY', 'DARAJA_CONSUMER_SECRET', 'DARAJA_SHORTCODE',
-    'DARAJA_PASSKEY', 'DARAJA_B2C_INITIATOR', 'DARAJA_B2C_CREDENTIAL', 'DARAJA_CALLBACK_BASE', 'DARAJA_SOURCE_CIDRS'],
+    'DARAJA_PASSKEY', 'DARAJA_B2C_INITIATOR', 'DARAJA_B2C_CREDENTIAL', 'DARAJA_CALLBACK_BASE', 'DARAJA_CALLBACK_TOKEN', 'DARAJA_SOURCE_CIDRS'],
     'DARAJA_DRIVER=daraja');
   need(v.SMS_DRIVER === 'africastalking', ['AT_USERNAME', 'AT_API_KEY'], 'SMS_DRIVER=africastalking');
 
@@ -186,7 +190,7 @@ const Env = z.object({
 /** Field names whose values never appear in a log line, error body, or boot banner. */
 const SECRET_KEYS = new Set([
   'JWT_SECRET', 'HANDOVER_SECRET', 'OPS_DATABASE_URL', 'WORKER_DATABASE_URL', 'COOKIE_SECRET', 'KYC_ENCRYPTION_KEY', 'R2_SECRET_ACCESS_KEY',
-  'DARAJA_CONSUMER_SECRET', 'DARAJA_PASSKEY', 'DARAJA_B2C_CREDENTIAL',
+  'DARAJA_CONSUMER_SECRET', 'DARAJA_PASSKEY', 'DARAJA_B2C_CREDENTIAL', 'DARAJA_CALLBACK_TOKEN',
   'ISSUER_API_KEY', 'ISSUER_WEBHOOK_SECRET', 'AT_API_KEY', 'DATABASE_URL', 'REDIS_URL',
 ]);
 

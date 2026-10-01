@@ -154,3 +154,12 @@ details.thread summary { cursor: pointer; font-size: 12.5px; color: var(--link);
 .signin .field input { width: 100%; }
 .stack.right { align-items: flex-end; }
 .table .nowrap { white-space: nowrap; }
+
+/* loading skeleton */
+.loading { display: flex; flex-direction: column; gap: 12px; max-width: 900px; }
+.skel { background: var(--rail); border-radius: 18px; animation: pulse 1.4s ease-in-out infinite; }
+.skel-title { height: 34px; width: 240px; }
+.skel-line { height: 14px; width: 420px; }
+.skel-block { height: 220px; border-radius: 26px; }
+@keyframes pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }

@@ -424,19 +424,6 @@ describe('idempotency', () => {
   });
 });
 
-describe('webhooks', () => {
-  test('a forged STK callback for a payment we never initiated credits nothing', async () => {
-    const u = await w.requester('Forger Fred');
-    await w.app.inject({
-      method: 'POST', url: '/webhooks/daraja/stk',
-      payload: { Body: { stkCallback: { CheckoutRequestID: 'ws_CO_forged', ResultCode: 0, ResultDesc: 'ok',
-        CallbackMetadata: { Item: [{ Name: 'Amount', Value: 100000 }] } } } },
-    });
-    await w.settle();
-    expect((await u.client.get('/wallet')).body.balance_cents).toBe(0);
-    const [ev] = await w.admin`SELECT count(*)::int AS n FROM mpesa_event WHERE checkout_ref = 'ws_CO_forged'`;
-    expect(ev!.n).toBe(1);   // recorded, and ignored
-  });
-});
+// Webhook source, token and forgery tests live in audit.test.ts (findings 2 and 6).
 
 void postgres;

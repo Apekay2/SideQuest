@@ -318,6 +318,9 @@ importers:
       '@sidequest/domain':
         specifier: workspace:*
         version: link:../packages/domain
+      '@sidequest/observability':
+        specifier: workspace:*
+        version: link:../packages/observability
       '@sidequest/worker':
         specifier: workspace:*
         version: link:../apps/worker

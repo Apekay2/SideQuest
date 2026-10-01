@@ -26,7 +26,7 @@ export const newIdemKey = () => Crypto.randomUUID();
 
 let refreshing: Promise<boolean> | null = null;
 
-async function refresh(): Promise<boolean> {
+export async function refresh(): Promise<boolean> {
   // One refresh in flight at a time: concurrent 401s wait on the same rotation, because a
   // second rotation with the now-spent token would revoke the whole family (04-api.md).
   refreshing ??= (async () => {

@@ -16,6 +16,12 @@ import type { FastifyInstance } from 'fastify';
 import { scrub } from '@sidequest/observability';
 import { AppError } from './errors.js';
 
+/** The origin of an Origin or Referer header value, or null if it is not a URL. */
+export function originOf(value: string | undefined): string | null {
+  if (!value) return null;
+  try { return new URL(value).origin; } catch { return null; }
+}
+
 export default fp(async function hardening(app: FastifyInstance) {
   const cfg = app.deps.cfg;
   const origins = cfg.ALLOWED_ORIGINS;
@@ -27,7 +33,7 @@ export default fp(async function hardening(app: FastifyInstance) {
   app.addHook('onRequest', async (req) => {
     const xff = String(req.headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     const hops = cfg.TRUSTED_PROXY_HOPS;
-    req.trustedIp = hops > 0 && xff.length >= hops ? xff[xff.length - hops]! : req.socket.remoteAddress ?? 'unknown';
+    req.trustedIp = hops > 0 && xff.length >= hops ? xff[xff.length - hops]! : req.socket?.remoteAddress ?? req.ip ?? 'unknown';
   });
 
   // ── CORS. An allowlist, echoed back only on an exact match. `origin: true` (reflect
@@ -52,8 +58,10 @@ export default fp(async function hardening(app: FastifyInstance) {
   app.addHook('onRequest', async (req) => {
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return;
     if (!req.headers.cookie) return;
-    const origin = req.headers.origin ?? req.headers.referer;
-    if (!origin || !origins.some((o) => origin.startsWith(o))) {
+    // Compare whole origins. A prefix test let https://console.example.com.evil.net pass for
+    // https://console.example.com; a Referer is reduced to its origin before comparing.
+    const origin = originOf(req.headers.origin ?? req.headers.referer);
+    if (!origin || !origins.includes(origin)) {
       throw new AppError(403, 'CSRF_ORIGIN', 'Cross-site write refused');
     }
   });
@@ -158,8 +166,10 @@ export default fp(async function hardening(app: FastifyInstance) {
   });
 
   // ── Body and header ceilings. Cheap, and they close off the "one 40 MB JSON body per
-  // connection" denial of service that no rate limiter counted.
+  // connection" denial of service that no rate limiter counted. A signed upload PUT carries a
+  // photo or a PDF and has its own, larger, route-level limit (uploads.routes.ts).
   app.addHook('onRequest', async (req) => {
+    if (req.method === 'PUT' && req.url.startsWith('/uploads/')) return;
     const len = Number(req.headers['content-length'] ?? 0);
     if (len > 256 * 1024) throw new AppError(413, 'BODY_TOO_LARGE', 'Request too large');
   });

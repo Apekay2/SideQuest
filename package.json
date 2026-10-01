@@ -17,7 +17,8 @@
     "dev:mobile": "pnpm --filter @sidequest/mobile start",
     "seed:demo": "node scripts/seed-demo.mjs",
     "seed:ops": "node scripts/seed-ops.mjs",
-    "lint:parity": "node scripts/check-parity.mjs"
+    "lint:parity": "node scripts/check-parity.mjs",
+    "verify": "pnpm typecheck && pnpm lint:parity && pnpm test && pnpm build"
   },
   "devDependencies": {
     "@types/node": "^22.20.4",

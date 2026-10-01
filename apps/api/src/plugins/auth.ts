@@ -43,6 +43,28 @@ export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
+/** Verify an access token and return its actor and expiry. Shared by HTTP and the WebSocket. */
+export async function verifyAccess(key: Uint8Array, token: string): Promise<{ actor: Actor; exp: number }> {
+  const { payload } = await jwtVerify(token, key, { issuer: ISSUER, algorithms: ['HS256'] });
+  return {
+    actor: {
+      id: String(payload.sub),
+      role: payload.role as Actor['role'],
+      tier: Number(payload.tier) as Actor['tier'],
+      entitlements: Array.isArray(payload.ent) ? (payload.ent as string[]) : [],
+      sessionId: String(payload.sid),
+    },
+    exp: Number(payload.exp),
+  };
+}
+
+/** True while the session behind a token is neither revoked nor expired. */
+export async function sessionLive(sql: Parameters<typeof withActor>[0], actor: Actor): Promise<boolean> {
+  const [row] = await withActor(sql, actor, (tx) => tx<{ revoked_at: Date | null; expires_at: Date }[]>`
+    SELECT revoked_at, expires_at FROM session WHERE id = ${actor.sessionId}`);
+  return !!row && !row.revoked_at && row.expires_at > new Date();
+}
+
 export default fp(async function auth(app: FastifyInstance) {
   const key = new TextEncoder().encode(app.deps.cfg.JWT_SECRET);
 
@@ -55,14 +77,7 @@ export default fp(async function auth(app: FastifyInstance) {
     const m = /^Bearer (.+)$/.exec(h);
     if (!m) throw new AppError(401, 'UNAUTHENTICATED', 'Sign in again');
     try {
-      const { payload } = await jwtVerify(m[1]!, key, { issuer: ISSUER, algorithms: ['HS256'] });
-      req.actor = {
-        id: String(payload.sub),
-        role: payload.role as Actor['role'],
-        tier: Number(payload.tier) as Actor['tier'],
-        entitlements: Array.isArray(payload.ent) ? (payload.ent as string[]) : [],
-        sessionId: String(payload.sid),
-      };
+      req.actor = (await verifyAccess(key, m[1]!)).actor;
     } catch {
       throw new AppError(401, 'UNAUTHENTICATED', 'Sign in again');
     }

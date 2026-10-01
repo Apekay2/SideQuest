@@ -38,6 +38,7 @@ export function buildWorkerDeps(cfg: Config, over: Partial<WorkerDeps> = {}): Wo
           env: cfg.DARAJA_ENV, consumerKey: cfg.DARAJA_CONSUMER_KEY!, consumerSecret: cfg.DARAJA_CONSUMER_SECRET!,
           shortcode: cfg.DARAJA_SHORTCODE!, passkey: cfg.DARAJA_PASSKEY!, initiator: cfg.DARAJA_B2C_INITIATOR!,
           securityCredential: cfg.DARAJA_B2C_CREDENTIAL!, callbackBase: cfg.DARAJA_CALLBACK_BASE!,
+          callbackToken: cfg.DARAJA_CALLBACK_TOKEN!,
         })),
     sms: over.sms ?? (cfg.SMS_DRIVER === 'console'
       ? new ConsoleSms()

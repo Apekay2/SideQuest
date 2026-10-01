@@ -40,6 +40,17 @@ export const logger = pino({
 
 export type Logger = typeof logger;
 
+/**
+ * A request URL with its secrets removed: the Daraja callback token (a path segment) and the
+ * signature on a signed upload link. Request URLs are logged on every request.
+ */
+export function redactUrl(url: string | undefined): string | undefined {
+  if (!url) return url;
+  return url
+    .replace(/^\/webhooks\/daraja\/[^/?]+/, '/webhooks/daraja/[redacted]')
+    .replace(/([?&](?:sig|token)=)[^&]*/g, '$1[redacted]');
+}
+
 // ─────────────────────────────────────────────── metrics
 
 type Labels = Record<string, string | number>;

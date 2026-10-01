@@ -17,7 +17,7 @@ import { Redis } from 'ioredis';
 import { createDb } from '@sidequest/db';
 import type { Config } from '@sidequest/config';
 import { LocalStorage, R2Storage, ConsoleSms, AfricasTalkingSms } from '@sidequest/adapters';
-import { logger } from '@sidequest/observability';
+import { logger, redactUrl } from '@sidequest/observability';
 import type { Deps } from './types.js';
 
 import hardening from './plugins/hardening.js';
@@ -77,7 +77,13 @@ export async function build(deps: Deps): Promise<FastifyInstance> {
   }
 
   const app = Fastify({
-    loggerInstance: logger.child({ component: 'api' }),
+    loggerInstance: logger.child({ component: 'api' }, {
+      serializers: {
+        req: (r: { method?: string; url?: string; host?: string; ip?: string; socket?: { remoteAddress?: string } }) => ({
+          method: r.method, url: redactUrl(r.url), host: r.host, remoteAddress: r.ip ?? r.socket?.remoteAddress,
+        }),
+      },
+    }),
     genReqId: () => randomUUID(),
     bodyLimit: 256 * 1024,
     trustProxy: false,          // hardening.ts resolves the client IP from a fixed hop count

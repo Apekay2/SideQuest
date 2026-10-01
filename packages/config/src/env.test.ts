@@ -22,7 +22,7 @@ function prodEnv(): Record<string, string> {
     STORAGE_DRIVER: 'r2', R2_ACCOUNT_ID: 'acct', R2_ACCESS_KEY_ID: 'akid', R2_SECRET_ACCESS_KEY: s(), R2_BUCKET: 'evidence',
     DARAJA_DRIVER: 'daraja', DARAJA_ENV: 'production', DARAJA_CONSUMER_KEY: 'ck', DARAJA_CONSUMER_SECRET: s(),
     DARAJA_SHORTCODE: '174379', DARAJA_PASSKEY: s(), DARAJA_B2C_INITIATOR: 'sq-initiator',
-    DARAJA_B2C_CREDENTIAL: s(), DARAJA_CALLBACK_BASE: 'https://api.sidequest.co.ke',
+    DARAJA_B2C_CREDENTIAL: s(), DARAJA_CALLBACK_BASE: 'https://api.sidequest.co.ke', DARAJA_CALLBACK_TOKEN: s(),
     DARAJA_SOURCE_CIDRS: '196.201.214.0/24',
     ISSUER_DRIVER: 'union', ISSUER_BASE_URL: 'https://issuer.example-bank.co.ke', ISSUER_API_KEY: s(32),
     ISSUER_WEBHOOK_SECRET: s(),
@@ -62,6 +62,9 @@ describe('config refusals', () => {
     const env = { ...prodEnv(), NODE_ENV: 'development' };
     delete (env as Record<string, string | undefined>).DARAJA_PASSKEY;
     expect(() => loadConfig(env)).toThrow(/DARAJA_PASSKEY/);
+    const noToken = { ...prodEnv() };
+    delete (noToken as Record<string, string | undefined>).DARAJA_CALLBACK_TOKEN;
+    expect(() => loadConfig(noToken)).toThrow(/DARAJA_CALLBACK_TOKEN/);
   });
 
   test('config never prints a secret', () => {

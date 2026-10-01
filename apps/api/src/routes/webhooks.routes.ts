@@ -17,17 +17,25 @@ import { metrics } from '@sidequest/observability';
 export default async function webhookRoutes(app: FastifyInstance) {
   const { cfg, sql } = app.deps;
 
-  function fromSafaricom(req: FastifyRequest): boolean {
-    // The fake driver delivers in-process in the worker and never calls these routes; in any
-    // live configuration the source list is required by env.ts.
-    if (cfg.DARAJA_DRIVER === 'fake') return cfg.NODE_ENV !== 'production';
-    return ipInCidrs(req.trustedIp, cfg.DARAJA_SOURCE_CIDRS);
+  const expected = cfg.DARAJA_CALLBACK_TOKEN ? Buffer.from(cfg.DARAJA_CALLBACK_TOKEN) : null;
+
+  /** Why a callback is refused, or null if it may proceed. */
+  function refusal(req: FastifyRequest): 'driver' | 'token' | 'source' | null {
+    // The fake driver delivers in-process in the worker and never calls these routes, so with
+    // it configured there is nothing legitimate to accept — an open route would let anyone
+    // post confirmations into a dev or staging money path.
+    if (cfg.DARAJA_DRIVER === 'fake' || !expected) return 'driver';
+    const got = Buffer.from(String((req.params as { token?: string }).token ?? ''));
+    if (got.length !== expected.length || !timingSafeEqual(got, expected)) return 'token';
+    if (!ipInCidrs(req.trustedIp, cfg.DARAJA_SOURCE_CIDRS)) return 'source';
+    return null;
   }
 
   const daraja = (kind: 'stk' | 'result' | 'timeout') => async (req: FastifyRequest) => {
-    if (!fromSafaricom(req)) {
-      metrics.increment('webhook.dropped', { source: 'daraja', reason: 'source' });
-      req.log.warn({ ip: req.trustedIp }, 'daraja callback from outside the allowlist dropped');
+    const why = refusal(req);
+    if (why) {
+      metrics.increment('webhook.dropped', { source: 'daraja', reason: why });
+      req.log.warn({ ip: req.trustedIp, reason: why }, 'daraja callback dropped');
       return { ResultCode: 0, ResultDesc: 'Accepted' };
     }
     await withActor(sql, null, (tx) => enqueueOutbox(tx, 'mpesa.callback', { kind, body: req.body as Record<string, unknown> }));
@@ -35,9 +43,9 @@ export default async function webhookRoutes(app: FastifyInstance) {
     return { ResultCode: 0, ResultDesc: 'Accepted' };
   };
 
-  app.post('/webhooks/daraja/stk', daraja('stk'));
-  app.post('/webhooks/daraja/b2c/result', daraja('result'));
-  app.post('/webhooks/daraja/timeout', daraja('timeout'));
+  app.post('/webhooks/daraja/:token/stk', daraja('stk'));
+  app.post('/webhooks/daraja/:token/b2c/result', daraja('result'));
+  app.post('/webhooks/daraja/:token/timeout', daraja('timeout'));
 
   // Card issuer events. Signed with ISSUER_WEBHOOK_SECRET over the RAW body — re-serialised
   // JSON is not byte-identical to what the issuer signed — so this route parses its own body.

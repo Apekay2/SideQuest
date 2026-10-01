@@ -4,8 +4,12 @@
 // seconds, not a stuck screen.
 
 import type { QueryClient } from '@tanstack/react-query';
-import { API_URL } from './api';
+import { API_URL, refresh } from './api';
 import { useSession } from './session';
+
+// Server close codes (apps/api/src/realtime/ws.ts): the socket is bound to the session.
+const EXPIRED = 4402;
+const AUTH_CLOSES = new Set([4401, 4402, 4403]);
 
 type Listener = (event: string, data: Record<string, unknown>) => void;
 const listeners = new Set<Listener>();
@@ -40,14 +44,27 @@ export function startRealtime(qc: QueryClient): () => void {
       if (msg.event === 'message.new' && errandId) qc.invalidateQueries({ queryKey: ['messages', errandId] });
       for (const l of listeners) l(msg.event, msg.data ?? {});
     };
-    ws.onclose = () => {
+    ws.onclose = (e) => {
+      ws = null;
       if (stopped) return;
+      // The server closed on the session, not the network: reconnecting with the same token
+      // would only be refused again. Expiry → refresh (a new access token reconnects via the
+      // subscription below); revoked or refused → wait for the next sign-in.
+      if (AUTH_CLOSES.has(e.code)) {
+        if (e.code === EXPIRED) void refresh();
+        return;
+      }
       setTimeout(connect, backoff);
       backoff = Math.min(backoff * 2, 30_000);
     };
     ws.onerror = () => ws?.close();
   };
   connect();
-  const unsub = useSession.subscribe((s, prev) => { if (s.access && s.access !== prev.access) { ws?.close(); } });
+  // A new access token: drop the old socket (its onclose reconnects) or, if none is open
+  // because the last one closed on the session, connect now.
+  const unsub = useSession.subscribe((s, prev) => {
+    if (!s.access || s.access === prev.access) return;
+    if (ws) ws.close(); else connect();
+  });
   return () => { stopped = true; unsub(); ws?.close(); };
 }
