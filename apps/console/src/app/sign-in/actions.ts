@@ -7,11 +7,16 @@ import { ACCESS, REFRESH, REFRESH_MAX_AGE, apiUrl, cookieOptions } from '@/lib/t
 export interface SignInState { step: 'phone' | 'code'; challengeId?: string; msisdn?: string; error?: string }
 
 async function post(path: string, body: unknown) {
-  const res = await fetch(apiUrl() + path, {
-    method: 'POST', cache: 'no-store',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(apiUrl() + path, {
+      method: 'POST', cache: 'no-store',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { status: 0, body: { code: 'API_UNREACHABLE', title: 'The SideQuest API is unreachable. Check that it is running and API_URL is set.' } };
+  }
   const text = await res.text();
   return { status: res.status, body: text ? JSON.parse(text) : null };
 }
