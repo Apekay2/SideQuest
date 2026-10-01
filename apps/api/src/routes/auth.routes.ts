@@ -68,7 +68,9 @@ export default async function authRoutes(app: FastifyInstance) {
   }, async (req, reply) => {
     const msisdn = msisdnOrThrow(parse(OtpRequest, req.body).msisdn);
     const id = randomUUID();
-    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    // The app-store review number (config): a fixed code, no SMS. Logged every time.
+    const review = Boolean(cfg.REVIEW_LOGIN_MSISDN && cfg.REVIEW_LOGIN_CODE && msisdn === cfg.REVIEW_LOGIN_MSISDN);
+    const code = review ? cfg.REVIEW_LOGIN_CODE! : String(randomInt(0, 1_000_000)).padStart(6, '0');
     const expiresAt = new Date(Date.now() + OTP_TTL_MS);
 
     await withActor(sql, null, (tx) => tx`
@@ -78,7 +80,8 @@ export default async function authRoutes(app: FastifyInstance) {
     // The one third-party call in a request path: an OTP that waits behind a queue is an OTP
     // the user has given up on. Everything else goes through the outbox.
     try {
-      await sms.send(msisdn, `Your Side Qwest code is ${code}. It expires in 5 minutes. Never share it.`);
+      if (review) req.log.warn({ challenge: id }, 'app-review sign-in requested (fixed code, no SMS)');
+      else await sms.send(msisdn, `Your Side Qwest code is ${code}. It expires in 5 minutes. Never share it.`);
     } catch (err) {
       req.log.error({ err }, 'otp sms failed');
       throw new AppError(503, 'SMS_UNAVAILABLE', 'We could not send the code. Try again shortly.');
@@ -134,7 +137,9 @@ export default async function authRoutes(app: FastifyInstance) {
 
       // One answer for "no account" and "not staff", so the console cannot be used to learn
       // which numbers are registered.
-      if (body.staff_only && account?.role !== 'staff') {
+      // The review number is for the customer apps only, never the console, even if someone
+      // made it staff.
+      if (body.staff_only && (account?.role !== 'staff' || challenge.msisdn === cfg.REVIEW_LOGIN_MSISDN)) {
         throw new AppError(403, 'NOT_STAFF', 'This number has no console access');
       }
       if (!account) {

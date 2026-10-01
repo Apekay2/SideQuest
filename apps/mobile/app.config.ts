@@ -8,13 +8,10 @@ import type { ExpoConfig, ConfigContext } from 'expo/config';
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...(config as ExpoConfig),
   version: process.env.APP_VERSION ?? config.version,
-  ios: {
-    ...config.ios,
-    buildNumber: process.env.IOS_BUILD_NUMBER ?? config.ios?.buildNumber ?? '1',
-  },
+  // Build numbers (iOS buildNumber, Android versionCode) are EAS-managed and auto-incremented
+  // on each production build (eas.json: appVersionSource "remote").
   android: {
     ...config.android,
-    versionCode: Number(process.env.ANDROID_VERSION_CODE ?? config.android?.versionCode ?? 1),
     ...(process.env.GOOGLE_MAPS_ANDROID_API_KEY
       ? { config: { ...config.android?.config, googleMaps: { apiKey: process.env.GOOGLE_MAPS_ANDROID_API_KEY } } }
       : {}),

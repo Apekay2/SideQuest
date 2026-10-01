@@ -78,6 +78,16 @@ describe('config refusals', () => {
   });
 });
 
+describe('app-review sign-in', () => {
+  const base = () => ({ ...prodEnv(), REVIEW_LOGIN_MSISDN: '+254700000123' });
+  test('number and code go together, and the code cannot be trivial', () => {
+    expect(() => loadConfig(base())).toThrow(/go together/);
+    expect(() => loadConfig({ ...base(), REVIEW_LOGIN_CODE: '111111' })).toThrow(/non-trivial/);
+    expect(() => loadConfig({ ...base(), REVIEW_LOGIN_CODE: '120120' })).toThrow(/non-trivial/);
+    expect(loadConfig({ ...base(), REVIEW_LOGIN_CODE: '482915' }).REVIEW_LOGIN_MSISDN).toBe('+254700000123');
+  });
+});
+
 describe('placeholder detection', () => {
   test('obvious placeholders are refused, in any case or with decoration', () => {
     for (const v of ['CHANGEME', 'changeme123', 'my_secret_key_2024', 'Password!', 'sk_test_51abc', 'your-key-here', 'xxx-xxx', 'TODO']) {

@@ -7,10 +7,10 @@ design docs live in `project/handoff_sidequest_mvp/`).
 
 | Part | Where | What it is |
 |---|---|---|
-| Mobile app | `apps/mobile` | Expo SDK 57 / expo-router, requester and runner, EN + SW. Built to the **Cross-Platform Parity** design. |
+| Mobile app | `apps/mobile` | Expo SDK 57 / expo-router, requester and runner, EN + SW, push notifications and a live map. Built to the **Cross-Platform Parity** design. |
 | API | `apps/api` | Fastify 5. Every request runs inside `withActor()`, so Postgres RLS decides what it can see. |
 | Worker | `apps/worker` | Outbox poller → BullMQ: card loads and the decline ladder, settlement, payouts, notifications, reconciliation. |
-| Ops console | `apps/console` | Next.js 16. KYC review, disputes and rulings, money trace. Built to the **Ops Console** design. |
+| Ops console | `apps/console` | Next.js 16. Overview, SOS queue, disputes and rulings, KYC review, errands, users and staff access, finance, money trace. Built to the **Ops Console** design. |
 | Packages | `packages/*` | `domain` (ledger, state machine, pure rules), `db` (migrations, gates), `config`, `contracts`, `adapters`, `observability`. |
 | End-to-end | `tests/e2e` | The API and worker run in-process against real Postgres and Redis, as the RLS roles. |
 
@@ -164,12 +164,25 @@ Checked and found sound:
 - a withdrawal racing an errand funding (the worker re-checks under the same lock)
 - token storage on device (keychain, this device only; memory only on web)
 
+## Going live
+
+[RELEASE.md](RELEASE.md) is the launch guide, in order:
+1. the accounts and credentials needed
+2. configuring and deploying the backend
+3. creating the first staff admin (`scripts/create-admin.mjs`)
+4. proving the money path in sandbox
+5. building and submitting the apps with EAS (`apps/mobile/eas.json`), including the app-store
+   review sign-in
+6. a pre-launch checklist
+
 ## Known limits
 
 - **Native builds.** No iOS or Android build was produced; the Expo build servers weren't
-  reachable from where this was built. The app is verified through jest under both platform
-  presets, and a web export driven against the live API. Native dependency versions are pinned
-  from Expo's bundled map.
+  reachable from where this was built. EAS is configured (`apps/mobile/eas.json`), and RELEASE.md
+  §5 is the procedure. The app is verified through jest under both platform presets, and a web
+  export driven against the live API. Native push delivery and the native map are therefore
+  untested on a device; the web build shows a text fallback instead of the map. Native
+  dependency versions are pinned from Expo's bundled map.
 - **Real providers.** The Daraja, card issuer, Africa's Talking and R2 drivers are written but
   haven't been exercised against their sandboxes.
 - **Console behind one IP.** All officer traffic reaches the API from the console server's

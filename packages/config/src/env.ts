@@ -127,6 +127,15 @@ const Env = z.object({
   AT_API_KEY: secret(24).optional(),
   AT_SENDER_ID: z.string().default('SIDEQWEST'),
 
+  /**
+   * App-store review sign-in. Apple and Google reviewers cannot receive our SMS, so one number
+   * may use a fixed code. Both or neither; the number gets no SMS, every use is logged, the
+   * usual OTP limits apply, and it can never sign in to the ops console. Use a number nobody
+   * owns, and remove it after review.
+   */
+  REVIEW_LOGIN_MSISDN: z.string().regex(/^\+2547\d{8}$|^\+2541\d{8}$/, 'E.164 Kenyan number, e.g. +254700000000').optional(),
+  REVIEW_LOGIN_CODE: z.string().regex(/^\d{6}$/, 'six digits').optional(),
+
   /** Push through Expo's service (APNs + FCM). `console` records instead; refused in production. */
   PUSH_DRIVER: z.enum(['console', 'expo']).default('console'),
   /** Only needed if the Expo project turns on "enhanced push security". */
@@ -169,6 +178,13 @@ const Env = z.object({
     if (v.JWT_SECRET === v.COOKIE_SECRET || v.JWT_SECRET === v.KYC_ENCRYPTION_KEY) {
       fail('secrets must not be reused across purposes');
     }
+  }
+
+  if (Boolean(v.REVIEW_LOGIN_MSISDN) !== Boolean(v.REVIEW_LOGIN_CODE)) {
+    ctx.addIssue({ code: 'custom', path: ['REVIEW_LOGIN_CODE'], message: 'REVIEW_LOGIN_MSISDN and REVIEW_LOGIN_CODE go together' });
+  }
+  if (v.REVIEW_LOGIN_CODE && (new Set(v.REVIEW_LOGIN_CODE).size < 4 || /^(\d)\1+$/.test(v.REVIEW_LOGIN_CODE))) {
+    ctx.addIssue({ code: 'custom', path: ['REVIEW_LOGIN_CODE'], message: 'use a non-trivial code (at least 4 distinct digits)' });
   }
 
   const need = (cond: boolean, keys: (keyof typeof v)[], why: string) => {
@@ -215,7 +231,7 @@ const Env = z.object({
 const SECRET_KEYS = new Set([
   'JWT_SECRET', 'HANDOVER_SECRET', 'OPS_DATABASE_URL', 'WORKER_DATABASE_URL', 'COOKIE_SECRET', 'KYC_ENCRYPTION_KEY', 'R2_SECRET_ACCESS_KEY',
   'DARAJA_CONSUMER_SECRET', 'DARAJA_PASSKEY', 'DARAJA_B2C_CREDENTIAL', 'DARAJA_CALLBACK_TOKEN',
-  'ISSUER_API_KEY', 'ISSUER_WEBHOOK_SECRET', 'AT_API_KEY', 'EXPO_ACCESS_TOKEN', 'DATABASE_URL', 'REDIS_URL',
+  'ISSUER_API_KEY', 'ISSUER_WEBHOOK_SECRET', 'AT_API_KEY', 'EXPO_ACCESS_TOKEN', 'REVIEW_LOGIN_CODE', 'DATABASE_URL', 'REDIS_URL',
 ]);
 
 /** Safe to print. Use this in the boot banner and anywhere config is attached to telemetry. */

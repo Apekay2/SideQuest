@@ -56,8 +56,8 @@ export class World {
   worker!: WorkerDeps;
   admin!: postgres.Sql;
 
-  async start() {
-    this.cfg = loadConfig(testEnv());
+  async start(env: Record<string, string> = {}) {
+    this.cfg = loadConfig({ ...testEnv(), ...env });
     this.apiDeps = buildDeps(this.cfg);
     this.app = await build(this.apiDeps);
     await this.app.ready();
