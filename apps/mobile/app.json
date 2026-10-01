@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Side Qwest",
+    "slug": "side-qwest",
+    "scheme": "sidequest",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#f5ead8",
+    "splash": { "image": "./assets/splash-icon.png", "resizeMode": "contain", "backgroundColor": "#f5ead8" },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "ke.co.sidequest.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Side Qwest uses the camera to photograph goods at each stall and to scan the handover code.",
+        "NSLocationWhenInUseUsageDescription": "Your location is shared with the other person on an errand only while it is running."
+      }
+    },
+    "android": {
+      "package": "ke.co.sidequest.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#f5ead8",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": true,
+      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION"]
+    },
+    "web": { "favicon": "./assets/favicon.png", "bundler": "metro" },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-font",
+      ["expo-camera", { "cameraPermission": "Side Qwest uses the camera to photograph goods at each stall and to scan the handover code.", "recordAudioAndroid": false }],
+      ["expo-location", { "locationWhenInUsePermission": "Your location is shared with the other person on an errand only while it is running." }],
+      "expo-localization"
+    ],
+    "experiments": { "typedRoutes": false },
+    "extra": { "apiUrl": "http://localhost:3000" }
+  }
+}

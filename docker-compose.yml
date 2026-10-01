@@ -1,0 +1,80 @@
+# The whole stack on one machine, from images built out of this repo:
+#
+#   node scripts/dev-env.mjs          # once: writes .env with fresh secrets
+#   docker compose up --build
+#
+# API on :3000, ops console on :3001. Development drivers only (fake Daraja, mock issuer,
+# console SMS, local storage) — the same .env the non-Docker dev loop uses, with hostnames
+# swapped for service names. OTPs appear in `docker compose logs api`.
+
+x-app-env: &app-env
+  env_file: .env
+  environment:
+    NODE_ENV: development
+    DATABASE_URL: postgres://sidequest_app:${APP_ROLE_PASSWORD}@postgres:5432/sidequest
+    OPS_DATABASE_URL: postgres://sidequest_ops:${APP_ROLE_PASSWORD}@postgres:5432/sidequest
+    WORKER_DATABASE_URL: postgres://sidequest_worker:${APP_ROLE_PASSWORD}@postgres:5432/sidequest
+    REDIS_URL: redis://redis:6379
+    STORAGE_LOCAL_DIR: /data/uploads
+
+services:
+  postgres:
+    build: infra/postgres
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpass}
+      POSTGRES_DB: sidequest
+    volumes: [pg:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "sidequest"]
+      interval: 2s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 30
+
+  # One-off: forward migrations as the owner, then exits. The services wait for it.
+  migrate:
+    build: { context: ., dockerfile: infra/docker/node.Dockerfile, args: { APP: worker } }
+    image: sidequest/worker
+    command: ["node", "dist/migrate.js"]
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-devpass}@postgres:5432/sidequest
+      APP_ROLE_PASSWORD: ${APP_ROLE_PASSWORD}
+    depends_on: { postgres: { condition: service_healthy } }
+
+  api:
+    build: { context: ., dockerfile: infra/docker/node.Dockerfile, args: { APP: api } }
+    image: sidequest/api
+    <<: *app-env
+    ports: ["3000:3000"]
+    volumes: [uploads:/data/uploads]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  worker:
+    image: sidequest/worker
+    <<: *app-env
+    volumes: [uploads:/data/uploads]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+
+  console:
+    build: { context: ., dockerfile: infra/docker/console.Dockerfile }
+    image: sidequest/console
+    environment:
+      API_URL: http://api:3000
+      # Browsers load evidence and KYC images from the API's public origin, not the service name.
+      STORAGE_PUBLIC_ORIGIN: http://localhost:3000
+    ports: ["3001:3001"]
+    depends_on: [api]
+
+volumes:
+  pg:
+  uploads:

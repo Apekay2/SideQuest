@@ -1,0 +1,29 @@
+{
+  "name": "@sidequest/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsup",
+    "drain": "tsx --env-file-if-exists=../../.env src/drain-cli.ts",
+    "reconcile": "tsx --env-file-if-exists=../../.env src/reconcile-cli.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@sidequest/adapters": "workspace:*",
+    "@sidequest/config": "workspace:*",
+    "@sidequest/db": "workspace:*",
+    "@sidequest/domain": "workspace:*",
+    "@sidequest/observability": "workspace:*",
+    "bullmq": "^6.3.10",
+    "ioredis": "^6.0.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1"
+  },
+  "exports": {
+    "./*": "./src/*.ts"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": { "strict": true },
+  "include": ["src", "**/*.ts", "**/*.tsx"],
+  // Tests run in Node under jest and are checked by tsconfig.test.json. Keeping Node and jest
+  // types out of the app's config means a stray `Buffer` in app code is a type error.
+  "exclude": ["node_modules", "**/*.test.ts", "**/*.test.tsx"]
+}

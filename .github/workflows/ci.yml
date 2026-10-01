@@ -1,0 +1,217 @@
+# .github/workflows/ci.yml
+# Every gate here runs something that exists in this repo. The handoff's pipeline called
+# scripts, lint rules and paths that were never written (a pgbouncer starter, drizzle drift
+# checks, code/api/test/...), and ran on postgis/postgis, which has no h3 — so the migrations
+# could not have applied. This one was rebuilt around what the repo actually has.
+#
+# Cheap gates first (typecheck, parity, secret scan); the jobs that need Postgres + PostGIS + h3
+# build that image from infra/postgres and run in parallel. Nothing here has production
+# credentials.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Weekly: catches dependency CVEs disclosed after a merge.
+  schedule:
+    - cron: '17 3 * * 1'
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '22'
+  PGPASSWORD: ci
+  NEXT_TELEMETRY_DISABLED: '1'
+
+jobs:
+  # ───────────────────────────────────────────── fast gates
+
+  static:
+    name: typecheck · unit · parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      # Brand is shared, chrome is native: Platform branching only in src/platform, and en/sw
+      # carrying the same keys and placeholders.
+      - run: pnpm lint:parity
+      - name: unit tests (domain, config, adapters, console)
+        run: pnpm --filter @sidequest/domain --filter @sidequest/config --filter @sidequest/adapters --filter @sidequest/console test
+      # RLS depends on route code going through app.tx / app.opsTx / withActor. A bare query on
+      # the pool runs with no actor. The health route's liveness probe is the one exception.
+      - name: no unscoped database access in route code
+        run: |
+          set -euo pipefail
+          if grep -rnE "deps\.sql\b|app\.deps\.sql|\bsql\.begin\(" apps/api/src/routes | grep -v 'health.routes.ts'; then
+            echo "::error::Route code must use app.tx(req, fn) or app.opsTx(req, fn); a bare query has no RLS actor"
+            exit 1
+          fi
+      # Destructive DDL in a new migration must be acknowledged, with a rollback note.
+      - name: destructive migrations are declared
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
+          NEW=$(git diff --name-only --diff-filter=A "origin/${{ github.base_ref }}"...HEAD -- 'packages/db/migrations/*.sql' || true)
+          for f in $NEW; do
+            if grep -qiE '^\s*(DROP (TABLE|COLUMN)|ALTER COLUMN .* TYPE|DROP NOT NULL|TRUNCATE)' "$f"; then
+              grep -qi -- '-- destructive: acknowledged' "$f" || {
+                echo "::error file=$f::destructive DDL needs a '-- destructive: acknowledged' marker and a rollback note"
+                exit 1; }
+            fi
+          done
+
+  mobile:
+    name: mobile · iOS and Android presets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # Every parity test runs twice, under jest-expo's ios and android presets.
+      - run: pnpm --filter @sidequest/mobile test --ci
+
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # history too: a rotated-but-committed key is still a leak
+      # The gitleaks binary itself, pinned and checksum-verified, over the full history: the
+      # same command a contributor runs locally. (gitleaks-action needs pull-requests access to
+      # list PR commits in a private repo; this needs none.) .gitleaksignore is honoured.
+      - name: gitleaks (full history)
+        env:
+          GITLEAKS_VERSION: 8.28.0
+          GITLEAKS_SHA256: a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb
+        run: |
+          set -euo pipefail
+          curl -sSfL -o /tmp/gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          /tmp/gitleaks git --redact --no-banner --exit-code 1 .
+      - name: no committed .env or database dumps
+        run: |
+          set -euo pipefail
+          bad=$(git ls-files | grep -E '(^|/)\.env($|\.)|dump\.rdb$|\.sql\.gz$' | grep -v '\.env\.example$' || true)
+          if [ -n "$bad" ]; then echo "$bad"; echo "::error::secrets or data committed"; exit 1; fi
+
+  deps:
+    name: dependency scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: pnpm }
+      # Critical blocks; high is reported and triaged.
+      - run: pnpm audit --prod --audit-level critical
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+  # ───────────────────────────────────────────── database gates
+
+  database:
+    name: migrations · RLS · ledger · e2e
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 2s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      # Service containers cannot be built from a Dockerfile, so Postgres runs as a step. This
+      # also proves infra/postgres builds.
+      - name: postgres 16 + postgis + h3
+        run: |
+          docker build -t sidequest/postgres infra/postgres
+          docker run -d --name pg -p 5432:5432 -e POSTGRES_PASSWORD=ci sidequest/postgres
+          # Wait on TCP, not the socket: during first-boot init the image runs a temporary
+          # server on the Unix socket only, then restarts. A socket check passes against that
+          # temporary server and the migration's TCP connection lands in the restart.
+          for i in $(seq 1 90); do docker exec pg pg_isready -h 127.0.0.1 -U postgres -q && break; sleep 1; done
+          docker exec pg pg_isready -h 127.0.0.1 -U postgres
+          docker exec pg psql -h 127.0.0.1 -U postgres -c 'CREATE DATABASE sq_shadow'
+      - name: forward migrate
+        run: pnpm migrate:up
+        env:
+          DATABASE_URL: postgres://postgres:ci@localhost:5432/sq_shadow
+          APP_ROLE_PASSWORD: ci-role-pw
+      # Migrations are idempotent: a second run applies nothing and refuses a drifted file.
+      - name: re-run is a no-op
+        run: pnpm migrate:up | grep -q 'up to date'
+        env:
+          DATABASE_URL: postgres://postgres:ci@localhost:5432/sq_shadow
+      # RLS enabled and forced everywhere, a policy on every table, no bypass role; currency
+      # invariants; ledger tables append-only for every login role.
+      - name: RLS, currency and ledger gates
+        run: pnpm db:gates
+        env:
+          DATABASE_URL: postgres://postgres:ci@localhost:5432/sq_shadow
+      # The API and worker in-process against real Postgres and Redis, connecting as the
+      # application roles — never the owner, which would bypass every policy and pass anyway.
+      - name: end-to-end (market run, security, flows)
+        run: pnpm --filter @sidequest/e2e test
+        env:
+          TEST_ADMIN_DATABASE_URL: postgres://postgres:ci@localhost:5432/sq_test
+          APP_ROLE_PASSWORD: ci-role-pw
+          TEST_REDIS_URL: redis://localhost:6379/15
+
+  # ───────────────────────────────────────────── images
+
+  images:
+    name: build images · scan
+    runs-on: ubuntu-latest
+    needs: [static, mobile, secrets, deps, database]
+    strategy:
+      matrix:
+        include:
+          - { name: api, file: infra/docker/node.Dockerfile, args: 'APP=api' }
+          - { name: worker, file: infra/docker/node.Dockerfile, args: 'APP=worker' }
+          - { name: console, file: infra/docker/console.Dockerfile, args: '' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          build-args: ${{ matrix.args }}
+          tags: sidequest/${{ matrix.name }}:${{ github.sha }}
+          load: true
+          push: false
+      # An SBOM per build makes the next CVE announcement answerable in minutes.
+      - uses: anchore/sbom-action@v0
+        with:
+          image: sidequest/${{ matrix.name }}:${{ github.sha }}
+          format: spdx-json
+          artifact-name: sbom-${{ matrix.name }}.spdx.json
+      - uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: sidequest/${{ matrix.name }}:${{ github.sha }}
+          severity: CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true

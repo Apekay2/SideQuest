@@ -1,0 +1,29 @@
+{
+  "name": "sidequest",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r --parallel --if-present typecheck",
+    "test": "pnpm -r --if-present test",
+    "build": "pnpm -r --if-present build",
+    "migrate:up": "pnpm --filter @sidequest/db migrate",
+    "db:gates": "pnpm --filter @sidequest/db gates",
+    "dev:api": "pnpm --filter @sidequest/api dev",
+    "dev:worker": "pnpm --filter @sidequest/worker dev",
+    "dev:console": "pnpm --filter @sidequest/console dev",
+    "dev:mobile": "pnpm --filter @sidequest/mobile start",
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "seed:ops": "node scripts/seed-ops.mjs",
+    "lint:parity": "node scripts/check-parity.mjs",
+    "verify": "pnpm typecheck && pnpm lint:parity && pnpm test && pnpm build"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "tsx": "^4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}
