@@ -7,7 +7,7 @@ import { Redis } from 'ioredis';
 import { Queue, Worker, type Job } from 'bullmq';
 import type { Config } from '@sidequest/config';
 import { createDb, enqueueOutbox, type Sql } from '@sidequest/db';
-import { MockIssuer, FakeMpesa, Daraja, ConsoleSms, AfricasTalkingSms } from '@sidequest/adapters';
+import { MockIssuer, FakeMpesa, Daraja, ConsoleSms, AfricasTalkingSms, ConsolePush, ExpoPush, LocalStorage, R2Storage } from '@sidequest/adapters';
 import { logger } from '@sidequest/observability';
 import type { WorkerDeps, JobContext } from './context.js';
 import { HANDLERS } from './handlers.js';
@@ -43,6 +43,11 @@ export function buildWorkerDeps(cfg: Config, over: Partial<WorkerDeps> = {}): Wo
     sms: over.sms ?? (cfg.SMS_DRIVER === 'console'
       ? new ConsoleSms()
       : new AfricasTalkingSms({ username: cfg.AT_USERNAME!, apiKey: cfg.AT_API_KEY!, senderId: cfg.AT_SENDER_ID, sandbox: cfg.NODE_ENV !== 'production' })),
+    push: over.push ?? (cfg.PUSH_DRIVER === 'expo' ? new ExpoPush({ accessToken: cfg.EXPO_ACCESS_TOKEN }) : new ConsolePush()),
+    storage: over.storage ?? (cfg.STORAGE_DRIVER === 'local'
+      ? new LocalStorage(cfg.STORAGE_LOCAL_DIR, cfg.API_PUBLIC_ORIGIN, cfg.COOKIE_SECRET)
+      : new R2Storage({ accountId: cfg.R2_ACCOUNT_ID!, accessKeyId: cfg.R2_ACCESS_KEY_ID!,
+          secretAccessKey: cfg.R2_SECRET_ACCESS_KEY!, bucket: cfg.R2_BUCKET! })),
   };
 }
 

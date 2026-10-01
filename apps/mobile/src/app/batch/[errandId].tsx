@@ -56,7 +56,7 @@ export default function BatchPlanner() {
               <Text style={{ fontFamily: t.fontBody, fontSize: t.size.body, color: t.text }}>{e.title}</Text>
               <Meta>{kes(e.agreed_fee_cents ?? e.max_fee_cents, T.locale)}</Meta>
             </View>
-            {on ? <CheckIcon /> : null}
+            {on ? <CheckIcon color={t.accent} /> : null}
           </SunkRow>
         );
       })}

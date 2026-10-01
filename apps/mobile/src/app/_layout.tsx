@@ -5,6 +5,8 @@
 import { useEffect, useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router/stack';
+import { router } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -14,6 +16,8 @@ import { tokens as t } from '../theme/tokens';
 import { useSession } from '../lib/session';
 import { restoreSession, isNetworkError } from '../lib/api';
 import { startRealtime } from '../lib/realtime';
+import { registerPush, errandFromNotification } from '../lib/push';
+import { LegalUpdate } from '../screens/LegalUpdate';
 
 const qc = new QueryClient({
   defaultOptions: {
@@ -27,9 +31,25 @@ export default function Root() {
   const hydrate = useSession((s) => s.hydrate);
   const access = useSession((s) => s.access);
   const [restored, setRestored] = useState(false);
+  const legalOutdated = useSession((s) => Boolean(s.access) && s.account?.legal_current === false);
 
   useEffect(() => { hydrate().then(() => restoreSession()).finally(() => setRestored(true)); }, [hydrate]);
   useEffect(() => (access ? startRealtime(qc) : undefined), [access]);
+  // Re-register on each sign-in/launch: tokens rotate, and the API upserts. Only once the
+  // person has already granted permission; asking is NotifyIntro's job.
+  const signedIn = Boolean(access);
+  useEffect(() => { if (signedIn) registerPush().catch(() => undefined); }, [signedIn]);
+  // A tapped notification opens its errand — also when the tap launched the app.
+  useEffect(() => {
+    if (!signedIn || !restored) return;
+    const open = (r: Notifications.NotificationResponse | null) => {
+      const id = errandFromNotification(r);
+      if (id) router.push(`/errand/${id}`);
+    };
+    Notifications.getLastNotificationResponseAsync().then(open).catch(() => undefined);
+    const sub = Notifications.addNotificationResponseReceivedListener(open);
+    return () => sub.remove();
+  }, [signedIn, restored]);
 
   if (!fonts || !restored) {
     return <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator color={t.accent} /></View>;
@@ -51,6 +71,7 @@ export default function Root() {
           <Stack.Screen name="chat/[id]" />
           <Stack.Screen name="kyc" />
         </Stack>
+        {legalOutdated ? <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}><LegalUpdate /></View> : null}
       </QueryClientProvider>
     </SafeAreaProvider>
   );

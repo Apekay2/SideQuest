@@ -16,6 +16,16 @@ type Tpl = { en: (v: Vars) => string; sw: (v: Vars) => string; sms?: boolean };
 const kes = (v: unknown) => (typeof v === 'number' ? format(money(v, 'KES')) : '');
 
 export const TEMPLATES: Record<string, Tpl> = {
+  'account.suspended': {
+    sms: true,
+    en: () => 'Your Side Qwest account has been suspended. Contact support if you think this is a mistake.',
+    sw: () => 'Akaunti yako ya Side Qwest imesimamishwa. Wasiliana na huduma kwa wateja ukiona ni kosa.',
+  },
+  'account.reinstated': {
+    sms: true,
+    en: () => 'Your Side Qwest account is active again. Sign in to continue.',
+    sw: () => 'Akaunti yako ya Side Qwest imerejeshwa. Ingia kuendelea.',
+  },
   'errand.offered': {
     sms: true,
     en: (v) => `You have a new Side Qwest offer for ${kes(v.feeCents)}. Open the app within 90 seconds to accept.`,
@@ -151,6 +161,7 @@ export const notify: Handler = async (payload, ctx) => {
   if (!n) return;
 
   await publish(ctx.deps, accountId, 'notification', { id: n.id, template, text, vars });
+  await pushTo(ctx, accountId, template, text, vars);
   if (tpl.sms) {
     try {
       await ctx.deps.sms.send(a.msisdn, text);
@@ -164,3 +175,32 @@ export const notify: Handler = async (payload, ctx) => {
     await ctx.deps.sql`UPDATE notification SET sent_at = now() WHERE id = ${n.id}`;
   }
 };
+
+/** Android channel for a template: money first, chat, then everything about an errand. */
+export function channelFor(template: string): 'money' | 'chat' | 'errand' {
+  if (/^(payment|payout|tranche|card|withdraw|wallet|reimbursement|errand\.settled)/.test(template)) return 'money';
+  if (template.startsWith('message.')) return 'chat';
+  return 'errand';
+}
+
+/**
+ * Push to every live device of the account. Never fails the job: the in-app copy is already
+ * published and money/decision messages also go by SMS. Devices the push service reports gone
+ * are revoked so the next message does not try them again.
+ */
+async function pushTo(ctx: Parameters<Handler>[1], accountId: string, template: string, text: string, vars: Vars) {
+  const tokens = await ctx.deps.sql<{ token: string }[]>`
+    SELECT token FROM push_token WHERE account_id = ${accountId} AND revoked_at IS NULL`;
+  if (tokens.length === 0) return;
+  const errandId = typeof vars.errandId === 'string' ? vars.errandId : undefined;
+  try {
+    const out = await ctx.deps.push.send(tokens.map((t) => ({
+      to: t.token, title: 'Side Qwest', body: text, channelId: channelFor(template),
+      data: { template, ...(errandId ? { errandId } : {}) },
+    })));
+    const gone = tokens.filter((_, i) => { const o = out[i]; return o && !o.ok && o.deviceGone; }).map((t) => t.token);
+    if (gone.length) await ctx.deps.sql`UPDATE push_token SET revoked_at = now() WHERE token = ANY(${gone}::text[])`;
+  } catch (err) {
+    ctx.log.warn({ err, template }, 'push delivery failed');
+  }
+}

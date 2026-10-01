@@ -14,6 +14,8 @@ export interface Actor {
   tier: 0 | 1 | 2 | 3;
   entitlements: readonly string[];
   sessionId: string;
+  /** Accepted the current terms and privacy notice (claim `lg`); staff are not asked. */
+  legal: boolean;
 }
 
 export interface Deps {

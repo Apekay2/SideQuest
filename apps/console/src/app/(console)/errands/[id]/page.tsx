@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
-import { api, ApiError } from '@/lib/api';
+import { api, ApiError, can, officer } from '@/lib/api';
+import { VoidCard } from './VoidCard';
 import { ksh, label, ref, when, ERRAND_KIND } from '@/lib/format';
 
 interface Trace {
@@ -28,6 +29,7 @@ export default async function ErrandTrace({ params }: { params: Promise<{ id: st
     throw e;
   }
   const e = t.errand;
+  const who = await officer();
   const party = (owner: string | null) => (owner === null ? 'platform' : owner === e.requester_id ? 'requester' : owner === e.runner_id ? 'runner' : 'other');
   const trancheSeq = new Map(t.tranches.map((x) => [x.id, x.seq]));
 
@@ -63,6 +65,7 @@ export default async function ErrandTrace({ params }: { params: Promise<{ id: st
         </div></div>
         <div className="tile"><div className="k">Card</div><div className="v">
           {t.card ? `••${t.card.last4 ?? '––'} · KSh ${ksh(t.card.loaded_cents)} loaded${t.card.voided_at ? ` · voided ${when(t.card.voided_at)}` : ''}` : 'No card issued'}
+          {t.card && !t.card.voided_at && can(who, 'legal_ops') && <div className="tile-action"><VoidCard errandId={e.id} cardId={t.card.id} /></div>}
         </div></div>
       </div>
       <div className="eyebrow">Everything that moved, in order</div>

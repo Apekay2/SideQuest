@@ -7,9 +7,9 @@
 // verifies. It exists so the whole system runs on a laptop; config refuses it in production.
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export interface PresignedPut { url: string; headers: Record<string, string>; expiresIn: number }
@@ -17,6 +17,8 @@ export interface PresignedPut { url: string; headers: Record<string, string>; ex
 export interface StoragePort {
   presignPut(key: string, contentType: string, ttlSeconds: number): Promise<PresignedPut>;
   presignGet(key: string, ttlSeconds: number): Promise<string>;
+  /** Remove an object for good (erasure, retention). Deleting a missing key is not an error. */
+  delete(key: string): Promise<void>;
 }
 
 // ─────────────────────────────────────────────── local
@@ -71,6 +73,10 @@ export class LocalStorage implements StoragePort {
     try { return await readFile(this.pathFor(key)); } catch { return null; }
   }
 
+  async delete(key: string): Promise<void> {
+    await rm(this.pathFor(key), { force: true });
+  }
+
   async exists(key: string): Promise<boolean> {
     return (await this.read(key)) !== null;
   }
@@ -97,5 +103,9 @@ export class R2Storage implements StoragePort {
 
   async presignGet(key: string, ttlSeconds: number): Promise<string> {
     return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.cfg.bucket, Key: key }), { expiresIn: ttlSeconds });
+  }
+
+  async delete(key: string): Promise<void> {
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.cfg.bucket, Key: key }));
   }
 }

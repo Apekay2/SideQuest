@@ -13,6 +13,7 @@ import { useSession } from '../../lib/session';
 import { useFeed, useAction, useErrands } from '../../features/errands/hooks';
 import { Screen } from '../../components/Screen';
 import { LiveCard } from '../../components/LiveCard';
+import { NotifyIntro } from '../../components/NotifyIntro';
 import { Card, Eyebrow, Field, Heading, Meta, Notice, PrimaryButton, SecondaryButton, Body } from '../../components/ui';
 
 export default function Feed() {
@@ -38,6 +39,7 @@ export default function Feed() {
 
   return (
     <Screen title={T('feed.title')} onRefresh={() => { feed.refetch(); offers.refetch(); }} refreshing={feed.isRefetching}>
+      <NotifyIntro role="runner" />
       {tier < 2 ? (
         <Card tint><Body color={t.accentDeep}>{T('home.verify_body')}</Body>
           <PrimaryButton style={{ marginTop: 12 }} label={T('home.verify_cta')} onPress={() => router.push('/kyc')} /></Card>

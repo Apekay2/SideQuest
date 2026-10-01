@@ -19,12 +19,30 @@ const PLACEHOLDERS = [
   'your-key-here', 'sk_test', 'dummy', 'example', 'localhost-only', 'insecure',
 ];
 
+/**
+ * A placeholder is judged by words, not substrings: random base64 contains "test", "todo" or
+ * "xxx" often enough that a substring check refused freshly generated secrets now and then.
+ *  - multi-part placeholders ("sk_test", "your-key-here") match as substrings; their length
+ *    makes a chance hit negligible;
+ *  - long ones ("changeme", "secret", "password"…) match as a whole word anywhere;
+ *  - short ones ("test", "todo", "xxx") only when the value is nothing but placeholder words,
+ *    digits and separators ("test123", "xxx-xxx") — a three-letter word between digits turns
+ *    up in random material about once in ten thousand secrets.
+ */
+export function looksLikePlaceholder(v: string): boolean {
+  const low = v.toLowerCase();
+  const words = low.split(/[^a-z]+/).filter(Boolean);
+  const isWord = (p: string) => !/[^a-z]/.test(p);
+  if (PLACEHOLDERS.some((p) => !isWord(p) && low.includes(p))) return true;
+  if (PLACEHOLDERS.some((p) => isWord(p) && p.length >= 5 && words.includes(p))) return true;
+  return words.length > 0 && words.every((w) => PLACEHOLDERS.includes(w));
+}
+
 /** A secret string: no default, minimum length, rejected if it looks like a placeholder or
  *  carries too few distinct characters to be random. */
 function secret(minLen = 32) {
   return z.string().min(minLen, `must be at least ${minLen} characters`).superRefine((v, ctx) => {
-    const low = v.toLowerCase();
-    if (PLACEHOLDERS.some((p) => low.includes(p))) {
+    if (looksLikePlaceholder(v)) {
       ctx.addIssue({ code: 'custom', message: 'looks like a placeholder value' });
     }
     if (new Set(v).size < 12) {
@@ -109,6 +127,20 @@ const Env = z.object({
   AT_API_KEY: secret(24).optional(),
   AT_SENDER_ID: z.string().default('SIDEQWEST'),
 
+  /**
+   * App-store review sign-in. Apple and Google reviewers cannot receive our SMS, so one number
+   * may use a fixed code. Both or neither; the number gets no SMS, every use is logged, the
+   * usual OTP limits apply, and it can never sign in to the ops console. Use a number nobody
+   * owns, and remove it after review.
+   */
+  REVIEW_LOGIN_MSISDN: z.string().regex(/^\+2547\d{8}$|^\+2541\d{8}$/, 'E.164 Kenyan number, e.g. +254700000000').optional(),
+  REVIEW_LOGIN_CODE: z.string().regex(/^\d{6}$/, 'six digits').optional(),
+
+  /** Push through Expo's service (APNs + FCM). `console` records instead; refused in production. */
+  PUSH_DRIVER: z.enum(['console', 'expo']).default('console'),
+  /** Only needed if the Expo project turns on "enhanced push security". */
+  EXPO_ACCESS_TOKEN: secret(24).optional(),
+
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
 
   // Product knobs that operations changes without a deploy would be nice, but for the MVP
@@ -148,6 +180,13 @@ const Env = z.object({
     }
   }
 
+  if (Boolean(v.REVIEW_LOGIN_MSISDN) !== Boolean(v.REVIEW_LOGIN_CODE)) {
+    ctx.addIssue({ code: 'custom', path: ['REVIEW_LOGIN_CODE'], message: 'REVIEW_LOGIN_MSISDN and REVIEW_LOGIN_CODE go together' });
+  }
+  if (v.REVIEW_LOGIN_CODE && (new Set(v.REVIEW_LOGIN_CODE).size < 4 || /^(\d)\1+$/.test(v.REVIEW_LOGIN_CODE))) {
+    ctx.addIssue({ code: 'custom', path: ['REVIEW_LOGIN_CODE'], message: 'use a non-trivial code (at least 4 distinct digits)' });
+  }
+
   const need = (cond: boolean, keys: (keyof typeof v)[], why: string) => {
     if (!cond) return;
     for (const k of keys) if (v[k] === undefined || (Array.isArray(v[k]) && (v[k] as unknown[]).length === 0)) {
@@ -164,6 +203,7 @@ const Env = z.object({
     if (v.STORAGE_DRIVER === 'local') fail('Refusing to boot production with local file storage');
     if (v.DARAJA_DRIVER === 'fake') fail('Refusing to boot production with the fake M-Pesa driver');
     if (v.SMS_DRIVER === 'console') fail('Refusing to boot production with SMS printed to the console');
+    if (v.PUSH_DRIVER === 'console') fail('Refusing to boot production with push notifications printed to the console');
     const opsUser = (() => { try { return new URL(v.OPS_DATABASE_URL).username; } catch { return ''; } })();
     if (opsUser !== 'sidequest_ops') fail('OPS_DATABASE_URL must connect as sidequest_ops');
     if (v.WORKER_DATABASE_URL) {
@@ -191,7 +231,7 @@ const Env = z.object({
 const SECRET_KEYS = new Set([
   'JWT_SECRET', 'HANDOVER_SECRET', 'OPS_DATABASE_URL', 'WORKER_DATABASE_URL', 'COOKIE_SECRET', 'KYC_ENCRYPTION_KEY', 'R2_SECRET_ACCESS_KEY',
   'DARAJA_CONSUMER_SECRET', 'DARAJA_PASSKEY', 'DARAJA_B2C_CREDENTIAL', 'DARAJA_CALLBACK_TOKEN',
-  'ISSUER_API_KEY', 'ISSUER_WEBHOOK_SECRET', 'AT_API_KEY', 'DATABASE_URL', 'REDIS_URL',
+  'ISSUER_API_KEY', 'ISSUER_WEBHOOK_SECRET', 'AT_API_KEY', 'EXPO_ACCESS_TOKEN', 'REVIEW_LOGIN_CODE', 'DATABASE_URL', 'REDIS_URL',
 ]);
 
 /** Safe to print. Use this in the boot banner and anywhere config is attached to telemetry. */

@@ -11,7 +11,7 @@ export class ApiError extends Error {
   }
 }
 
-async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+async function call<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unknown): Promise<T> {
   const token = (await cookies()).get(ACCESS)?.value;
   if (!token) redirect('/sign-in');
   let res: Response;
@@ -41,6 +41,7 @@ async function call<T>(method: 'GET' | 'POST', path: string, body?: unknown): Pr
 export const api = {
   get: <T>(path: string) => call<T>('GET', path),
   post: <T>(path: string, body: unknown = {}) => call<T>('POST', path, body),
+  put: <T>(path: string, body: unknown = {}) => call<T>('PUT', path, body),
 };
 
 /**

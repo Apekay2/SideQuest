@@ -18,6 +18,8 @@ import { useErrand, useBids, useNearby, useAction } from '../../features/errands
 import { Screen } from '../../components/Screen';
 import { Card, Eyebrow, Heading, Meta, Body, PrimaryButton, SecondaryButton, SunkRow, Notice } from '../../components/ui';
 import { CheckIcon, AlertIcon, ClockIcon } from '../../components/icons';
+import { LiveMap } from '../../components/LiveMap';
+import { metresBetween, humanDistance } from '../../lib/geo';
 
 const LIVE = ['awarded', 'en_route', 'shopping', 'awaiting_approval', 'handover'];
 
@@ -66,6 +68,12 @@ function RequesterView({ e, link }: { e: ErrandDetail; link: ReturnType<typeof u
         <Card style={{ gap: 6 }}>
           <Heading>{e.runner.display_name}</Heading>
           <Meta>{T('profile.tier', { tier: e.runner.verification_tier })}</Meta>
+          {e.dropoff ? (
+            <LiveMap runner={link.peer} dropoff={e.dropoff} runnerLabel={e.runner.display_name} dropoffLabel={T('live.map_dropoff')}
+              caption={link.peer
+                ? T('live.map_runner', { name: e.runner.display_name, distance: humanDistance(metresBetween(link.peer, e.dropoff)) })
+                : T('live.map_waiting', { name: e.runner.display_name })} />
+          ) : null}
           <LocationLine link={link} />
         </Card>
       ) : null}

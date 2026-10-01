@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { Platform, AccessibilityInfo, BackHandler } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
+import * as Notifications from 'expo-notifications';
 
 export const isIOS = Platform.OS === 'ios';
 export const isAndroid = Platform.OS === 'android';
@@ -226,6 +227,26 @@ export const notificationChannels = [
   { id: 'chat', name: 'Messages', importance: 'default', iosLevel: 'active' },
   { id: 'marketing', name: 'Offers', importance: 'low', iosLevel: 'passive' },
 ] as const;
+
+/** The push platform this build registers as; null where there is no push (web). */
+export const pushPlatform: 'ios' | 'android' | null =
+  Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : null;
+
+/**
+ * Android needs its notification channels created before the first notification arrives (the
+ * worker addresses them by id); iOS has no channels, and its levels come from the payload.
+ */
+export async function setupNotificationChannels(): Promise<void> {
+  if (Platform.OS !== 'android') return;
+  const importance = {
+    high: Notifications.AndroidImportance.HIGH,
+    default: Notifications.AndroidImportance.DEFAULT,
+    low: Notifications.AndroidImportance.LOW,
+  } as const;
+  for (const c of notificationChannels) {
+    await Notifications.setNotificationChannelAsync(c.id, { name: c.name, importance: importance[c.importance] });
+  }
+}
 
 /**
  * Permission priming. Both platforms punish a cold request, differently: iOS gives one

@@ -34,6 +34,25 @@ export const Role = z.enum(['requester', 'runner']);
 
 // ─────────────────────────────────────────────── auth
 
+/**
+ * The versions of the terms and the privacy notice in force. Bump a date when its text changes:
+ * everyone must accept the new version before they can do anything that changes data again.
+ * The published documents live at the URLs in the app's config (EXPO_PUBLIC_TERMS_URL etc.).
+ */
+export const LEGAL_VERSIONS = { terms: '2026-10-01', privacy: '2026-10-01' } as const;
+export const LegalAcceptance = z.object({
+  terms: z.literal(LEGAL_VERSIONS.terms),
+  privacy: z.literal(LEGAL_VERSIONS.privacy),
+  /** The person confirms they are 18 or older. */
+  adult: z.literal(true),
+});
+
+/** Closing an account is irreversible, so the body has to say so. */
+export const DeleteAccount = z.object({ confirm: z.literal('DELETE') });
+/** Live location sharing during errands (tier-3 runners). Revocable at any time. */
+export const LocationConsentBody = z.object({ consent: z.boolean() });
+export interface LocationConsent { consent: boolean | null; changed_at: string | null }
+
 export const OtpRequest = z.object({ msisdn: z.string().min(9).max(16) });
 export const OtpVerify = z.object({
   challenge_id: uuid,
@@ -43,6 +62,12 @@ export const OtpVerify = z.object({
   display_name: z.string().min(1).max(48).optional(),
   /** The ops console sets this: never create an account, and issue a session only to staff. */
   staff_only: z.boolean().optional(),
+  /** Required to create an account; recorded again (harmlessly) on later sign-ins. */
+  accept_legal: z.unknown().optional(),
+});
+export const PushTokenBody = z.object({
+  token: z.string().regex(/^Expo(nent)?PushToken\[[A-Za-z0-9_-]{10,64}\]$/, 'Not an Expo push token'),
+  platform: z.enum(['ios', 'android']),
 });
 export const RefreshRequest = z.object({ refresh: z.string().min(20).max(200).optional() });
 export const PatchMe = z.object({
@@ -60,6 +85,8 @@ export interface Me {
   entitlements: string[];
   language: 'en' | 'sw';
   market: string;
+  /** False when the current terms or privacy notice have not been accepted (LEGAL_VERSIONS). */
+  legal_current: boolean;
 }
 export interface Session { access: string; refresh: string; expires_in: number; account: Me }
 
@@ -291,6 +318,12 @@ export const KycDecision = z.object({
   tier: z.number().int().min(1).max(3).optional(),
   reason: z.string().max(280).optional(),
 });
+export const STAFF_GRANTS = ['ops.read', 'kyc.review', 'evidence.view', 'ledger.read', 'location.read_cells',
+  'audit.read', 'legal_ops', 'accounts.manage', 'staff.admin'] as const;
+export const StaffGrants = z.object({ grants: z.array(z.enum(STAFF_GRANTS)).max(STAFF_GRANTS.length) });
+export const Suspension = z.object({ reason: z.string().trim().min(8).max(280) });
+export const SosResolve = z.object({ note: z.string().trim().min(4).max(1000) });
+
 export const Ruling = z.object({
   outcome: z.enum(['requester_favour', 'runner_favour', 'split', 'void']),
   requester_cents: cents,
@@ -311,5 +344,6 @@ export const ERROR_CODES = [
   'BID_CLOSED', 'RETAKE_EXHAUSTED', 'CARD_DECLINED', 'INSUFFICIENT_ESCROW', 'INSUFFICIENT_FUNDS',
   'PAYOUT_FAILED', 'IDEMPOTENCY_CONFLICT', 'RATE_LIMITED', 'NOT_FOUND', 'FORBIDDEN',
   'ALREADY_ASSIGNED', 'LINK_NOT_ESTABLISHED', 'CONSENT_REQUIRED', 'VALIDATION',
+  'LEGAL_ACCEPTANCE_REQUIRED', 'ACCOUNT_HAS_BALANCE', 'LIVE_ERRANDS', 'OPEN_DISPUTE',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];

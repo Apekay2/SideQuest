@@ -6,6 +6,7 @@ import { randomUUID, randomInt } from 'node:crypto';
 import postgres from 'postgres';
 import type { FastifyInstance } from 'fastify';
 import { loadConfig, type Config } from '@sidequest/config';
+import { LEGAL_VERSIONS } from '@sidequest/contracts';
 import { build, buildDeps } from '@sidequest/api/server';
 import { buildWorkerDeps, drain } from '@sidequest/worker/runtime';
 import type { WorkerDeps } from '@sidequest/worker/context';
@@ -39,7 +40,8 @@ export class Client {
   get<T = any>(url: string, opts?: { headers?: Record<string, string> }) { return this.req<T>('GET', url, undefined, opts); }
   post<T = any>(url: string, body?: unknown, opts?: { idem?: string | false; headers?: Record<string, string> }) { return this.req<T>('POST', url, body ?? {}, opts); }
   patch<T = any>(url: string, body?: unknown) { return this.req<T>('PATCH', url, body ?? {}); }
-  delete<T = any>(url: string) { return this.req<T>('DELETE', url); }
+  put<T = any>(url: string, body?: unknown) { return this.req<T>('PUT', url, body ?? {}); }
+  delete<T = any>(url: string, body?: unknown) { return this.req<T>('DELETE', url, body); }
 }
 
 export const NAIROBI = {
@@ -55,8 +57,8 @@ export class World {
   worker!: WorkerDeps;
   admin!: postgres.Sql;
 
-  async start() {
-    this.cfg = loadConfig(testEnv());
+  async start(env: Record<string, string> = {}) {
+    this.cfg = loadConfig({ ...testEnv(), ...env });
     this.apiDeps = buildDeps(this.cfg);
     this.app = await build(this.apiDeps);
     await this.app.ready();
@@ -97,6 +99,7 @@ export class World {
     const code = /(\d{6})/.exec(text)![1]!;
     const v = await anon.post('/auth/verify', {
       challenge_id: otp.body.challenge_id, code, role: opts.role ?? 'requester', display_name: opts.name ?? 'Amina Wanjiru',
+      accept_legal: { ...LEGAL_VERSIONS, adult: true },
     }, { idem: false });
     if (v.status !== 200) throw new Error(`verify ${v.status} ${JSON.stringify(v.body)}`);
     return {

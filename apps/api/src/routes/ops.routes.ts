@@ -9,23 +9,15 @@ import { z } from 'zod';
 import { KycDecision, Ruling } from '@sidequest/contracts';
 import { csvCell, cleanProse } from '@sidequest/domain/text/sanitize';
 import { enqueueOutbox, type Tx } from '@sidequest/db';
-import { ipInCidrs } from '@sidequest/adapters';
 import { AppError, notFound } from '../plugins/errors.js';
 import { parse, ids } from '../lib/validate.js';
 import { open as openSealed } from '../lib/seal.js';
+import { opsGate, opsAudit, holds } from '../lib/ops.js';
 
 export default async function opsRoutes(app: FastifyInstance) {
   const { cfg, storage } = app.deps;
 
-  const gate = (ent: string) => [
-    async (req: FastifyRequest) => {
-      if (cfg.OPS_IP_ALLOWLIST.length > 0 && !ipInCidrs(req.trustedIp, cfg.OPS_IP_ALLOWLIST)) {
-        throw new AppError(403, 'FORBIDDEN', 'Not reachable from this network');
-      }
-    },
-    app.requireRole('staff'),
-    app.requireEntitlement(ent),
-  ];
+  const gate = opsGate(app);
 
   // What escrow holds for an errand, from the ledger: the number a ruling must split exactly.
   const heldCents = async (tx: Tx, errandId: string) => {
@@ -35,11 +27,8 @@ export default async function opsRoutes(app: FastifyInstance) {
     return r!.held;
   };
 
-  const canSeeLedger = (req: FastifyRequest) => req.actor!.entitlements.includes('ledger.read');
-
-  const audit = (req: FastifyRequest, tx: Tx, action: string, subject: string, meta?: Record<string, unknown>) => tx`
-    INSERT INTO audit_log (actor_id, action, subject, meta)
-    VALUES (${req.actor!.id}, ${action}, ${subject}, ${tx.json({ ...(meta ?? {}), ip: req.trustedIp, request_id: req.id } as never)})`;
+  const canSeeLedger = (req: FastifyRequest) => holds(req, 'ledger.read');
+  const audit = opsAudit;
 
   // ─────────────────────────────────────────── KYC
 

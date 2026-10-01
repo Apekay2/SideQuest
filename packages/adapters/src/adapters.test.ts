@@ -72,3 +72,30 @@ describe('local storage signing', () => {
     await expect(store.write('../../etc/x', Buffer.from('x'))).rejects.toThrow(/escapes/);
   });
 });
+
+describe('push', async () => {
+  const { ExpoPush } = await import('./push/index.js');
+  it('Expo tickets map to outcomes in order; DeviceNotRegistered marks the device gone', async () => {
+    const fetcher = (async (_url: string, init: RequestInit) => {
+      const sent = JSON.parse(String(init.body)) as unknown[];
+      expect(sent).toHaveLength(3);
+      return new Response(JSON.stringify({ data: [
+        { status: 'ok', id: 'a' },
+        { status: 'error', message: 'gone', details: { error: 'DeviceNotRegistered' } },
+        { status: 'error', message: 'too big', details: { error: 'MessageTooBig' } },
+      ] }));
+    }) as unknown as typeof fetch;
+    const out = await new ExpoPush({ fetcher }).send(['A', 'B', 'C'].map((t) => ({ to: `ExponentPushToken[${t}xxxxxxxxxx]`, title: 'Side Qwest', body: 'hi' })));
+    expect(out).toEqual([
+      { ok: true },
+      { ok: false, error: 'DeviceNotRegistered', deviceGone: true },
+      { ok: false, error: 'MessageTooBig', deviceGone: false },
+    ]);
+  });
+
+  it('a failed request fails every message in it without blaming the devices', async () => {
+    const fetcher = (async () => new Response('busy', { status: 429 })) as unknown as typeof fetch;
+    const out = await new ExpoPush({ fetcher }).send([{ to: 'ExponentPushToken[xxxxxxxxxxxx]', title: 't', body: 'b' }]);
+    expect(out).toEqual([{ ok: false, error: 'push service 429', deviceGone: false }]);
+  });
+});

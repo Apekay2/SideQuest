@@ -1,0 +1,37 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "node": "22.22.2",
+      "pnpm": "10.33.0"
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://staging-api.sidequest.co.ke",
+        "EXPO_PUBLIC_TERMS_URL": "https://sidequest.co.ke/terms",
+        "EXPO_PUBLIC_PRIVACY_URL": "https://sidequest.co.ke/privacy"
+      }
+    },
+    "production": {
+      "extends": "base",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.sidequest.co.ke",
+        "EXPO_PUBLIC_TERMS_URL": "https://sidequest.co.ke/terms",
+        "EXPO_PUBLIC_PRIVACY_URL": "https://sidequest.co.ke/privacy"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": { "track": "internal", "releaseStatus": "draft" },
+      "ios": {}
+    }
+  }
+}
