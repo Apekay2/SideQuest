@@ -12,6 +12,14 @@ export const env = Object.fromEntries(readFileSync(new URL('../../.env', import.
   .split('\n').filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// The seeds write as the database owner, so being on development drivers is not proof enough:
+// they also refuse to run unless both the env file and the target API are local.
+const isLocal = (u) => { try { return ['localhost', '127.0.0.1', '::1'].includes(new URL(u).hostname); } catch { return false; } };
+if (env.NODE_ENV !== 'development' || env.SMS_DRIVER !== 'console' || !isLocal(API) || !isLocal(env.MIGRATE_DATABASE_URL ?? '')) {
+  console.error('seed refused: requires NODE_ENV=development, SMS_DRIVER=console, and a localhost API and database');
+  process.exit(2);
+}
+
 export async function call(method, path, token, body) {
   const res = await fetch(API + path, {
     method,
