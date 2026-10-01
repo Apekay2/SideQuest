@@ -16,6 +16,16 @@ type Tpl = { en: (v: Vars) => string; sw: (v: Vars) => string; sms?: boolean };
 const kes = (v: unknown) => (typeof v === 'number' ? format(money(v, 'KES')) : '');
 
 export const TEMPLATES: Record<string, Tpl> = {
+  'account.suspended': {
+    sms: true,
+    en: () => 'Your Side Qwest account has been suspended. Contact support if you think this is a mistake.',
+    sw: () => 'Akaunti yako ya Side Qwest imesimamishwa. Wasiliana na huduma kwa wateja ukiona ni kosa.',
+  },
+  'account.reinstated': {
+    sms: true,
+    en: () => 'Your Side Qwest account is active again. Sign in to continue.',
+    sw: () => 'Akaunti yako ya Side Qwest imerejeshwa. Ingia kuendelea.',
+  },
   'errand.offered': {
     sms: true,
     en: (v) => `You have a new Side Qwest offer for ${kes(v.feeCents)}. Open the app within 90 seconds to accept.`,

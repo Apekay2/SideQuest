@@ -37,6 +37,7 @@ import locationRoutes from './routes/location.routes.js';
 import walletRoutes from './routes/wallet.routes.js';
 import safetyRoutes from './routes/safety.routes.js';
 import opsRoutes from './routes/ops.routes.js';
+import opsAdminRoutes from './routes/ops-admin.routes.js';
 import webhookRoutes from './routes/webhooks.routes.js';
 import uploadRoutes from './routes/uploads.routes.js';
 import realtime from './realtime/ws.js';
@@ -110,6 +111,7 @@ export async function build(deps: Deps): Promise<FastifyInstance> {
   await app.register(walletRoutes);
   await app.register(safetyRoutes);
   await app.register(opsRoutes);
+  await app.register(opsAdminRoutes);
   await app.register(webhookRoutes);
   await app.register(uploadRoutes);
   await app.register(realtime);

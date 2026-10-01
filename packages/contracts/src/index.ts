@@ -291,6 +291,12 @@ export const KycDecision = z.object({
   tier: z.number().int().min(1).max(3).optional(),
   reason: z.string().max(280).optional(),
 });
+export const STAFF_GRANTS = ['ops.read', 'kyc.review', 'evidence.view', 'ledger.read', 'location.read_cells',
+  'audit.read', 'legal_ops', 'accounts.manage', 'staff.admin'] as const;
+export const StaffGrants = z.object({ grants: z.array(z.enum(STAFF_GRANTS)).max(STAFF_GRANTS.length) });
+export const Suspension = z.object({ reason: z.string().trim().min(8).max(280) });
+export const SosResolve = z.object({ note: z.string().trim().min(4).max(1000) });
+
 export const Ruling = z.object({
   outcome: z.enum(['requester_favour', 'runner_favour', 'split', 'void']),
   requester_cents: cents,

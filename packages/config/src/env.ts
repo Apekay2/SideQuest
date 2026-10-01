@@ -19,12 +19,30 @@ const PLACEHOLDERS = [
   'your-key-here', 'sk_test', 'dummy', 'example', 'localhost-only', 'insecure',
 ];
 
+/**
+ * A placeholder is judged by words, not substrings: random base64 contains "test", "todo" or
+ * "xxx" often enough that a substring check refused freshly generated secrets now and then.
+ *  - multi-part placeholders ("sk_test", "your-key-here") match as substrings; their length
+ *    makes a chance hit negligible;
+ *  - long ones ("changeme", "secret", "password"…) match as a whole word anywhere;
+ *  - short ones ("test", "todo", "xxx") only when the value is nothing but placeholder words,
+ *    digits and separators ("test123", "xxx-xxx") — a three-letter word between digits turns
+ *    up in random material about once in ten thousand secrets.
+ */
+export function looksLikePlaceholder(v: string): boolean {
+  const low = v.toLowerCase();
+  const words = low.split(/[^a-z]+/).filter(Boolean);
+  const isWord = (p: string) => !/[^a-z]/.test(p);
+  if (PLACEHOLDERS.some((p) => !isWord(p) && low.includes(p))) return true;
+  if (PLACEHOLDERS.some((p) => isWord(p) && p.length >= 5 && words.includes(p))) return true;
+  return words.length > 0 && words.every((w) => PLACEHOLDERS.includes(w));
+}
+
 /** A secret string: no default, minimum length, rejected if it looks like a placeholder or
  *  carries too few distinct characters to be random. */
 function secret(minLen = 32) {
   return z.string().min(minLen, `must be at least ${minLen} characters`).superRefine((v, ctx) => {
-    const low = v.toLowerCase();
-    if (PLACEHOLDERS.some((p) => low.includes(p))) {
+    if (looksLikePlaceholder(v)) {
       ctx.addIssue({ code: 'custom', message: 'looks like a placeholder value' });
     }
     if (new Set(v).size < 12) {

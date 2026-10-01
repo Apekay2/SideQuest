@@ -48,7 +48,7 @@ export default fp(async function hardening(app: FastifyInstance) {
     reply.header('Access-Control-Allow-Origin', origin);
     reply.header('Access-Control-Allow-Credentials', 'true');
     reply.header('Access-Control-Allow-Headers', 'authorization,content-type,idempotency-key,x-device-id');
-    reply.header('Access-Control-Allow-Methods', 'GET,POST,PATCH,DELETE,OPTIONS');
+    reply.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
     reply.header('Access-Control-Max-Age', '600');
     reply.header('Vary', 'Origin');
   });

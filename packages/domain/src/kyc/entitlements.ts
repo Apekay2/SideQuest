@@ -21,11 +21,14 @@ export const ENTITLEMENTS = [
   'location.read_cells',
   'audit.read',
   'legal_ops',          // the only entitlement that can split a frozen escrow
+  'accounts.manage',    // suspend and reinstate accounts
+  'staff.admin',        // promote accounts to staff and set their grants (never their own)
 ] as const;
 
 /** Entitlements that only staff can hold. Never derived from a verification tier. */
 export const STAFF_ENTITLEMENTS: readonly Entitlement[] = [
   'ops.read', 'kyc.review', 'evidence.view', 'ledger.read', 'location.read_cells', 'audit.read', 'legal_ops',
+  'accounts.manage', 'staff.admin',
 ];
 
 export type Entitlement = (typeof ENTITLEMENTS)[number];

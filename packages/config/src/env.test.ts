@@ -3,7 +3,7 @@
 
 import { describe, test, expect } from 'vitest';
 import { randomBytes } from 'node:crypto';
-import { loadConfig } from './env.js';
+import { loadConfig, looksLikePlaceholder } from './env.js';
 
 const s = (n = 48) => randomBytes(n).toString('base64url');
 
@@ -74,5 +74,24 @@ describe('config refusals', () => {
     for (const k of ['JWT_SECRET', 'DARAJA_PASSKEY', 'HANDOVER_SECRET', 'DATABASE_URL'] as const) {
       expect(printed).not.toContain(env[k]);
     }
+  });
+});
+
+describe('placeholder detection', () => {
+  test('obvious placeholders are refused, in any case or with decoration', () => {
+    for (const v of ['CHANGEME', 'changeme123', 'my_secret_key_2024', 'Password!', 'sk_test_51abc', 'your-key-here', 'xxx-xxx', 'TODO']) {
+      expect(looksLikePlaceholder(v), v).toBe(true);
+    }
+  });
+
+  test('freshly generated secrets are never refused (this used to fail at random)', () => {
+    // 20 000 base64/base64url secrets, the shapes `openssl rand -base64 48` and dev-env produce.
+    const refused: string[] = [];
+    for (let i = 0; i < 10_000; i++) {
+      for (const v of [randomBytes(48).toString('base64'), randomBytes(48).toString('base64url')]) {
+        if (looksLikePlaceholder(v)) refused.push(v);
+      }
+    }
+    expect(refused).toEqual([]);
   });
 });
