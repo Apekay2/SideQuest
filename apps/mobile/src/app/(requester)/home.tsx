@@ -8,6 +8,7 @@ import { useErrands } from '../../features/errands/hooks';
 import { Screen } from '../../components/Screen';
 import { LiveCard } from '../../components/LiveCard';
 import { PostFab } from '../../components/AdaptiveTabBar';
+import { NotifyIntro } from '../../components/NotifyIntro';
 import { Eyebrow, SunkRow, Body, Card, Heading, PrimaryButton } from '../../components/ui';
 
 export default function Home() {
@@ -29,6 +30,7 @@ export default function Home() {
           <PrimaryButton style={{ marginTop: 14 }} label={T('home.verify_cta')} onPress={() => router.push('/kyc')} />
         </Card>
       ) : null}
+      {tier >= 1 ? <NotifyIntro role="requester" /> : null}
       <Eyebrow>{T('home.live')}</Eyebrow>
       {running.length === 0 ? <Body color={t.textMuted}>{T('home.empty')}</Body> : null}
       {running.map((e) => <LiveCard key={e.id} e={e} onPress={() => router.push(`/errand/${e.id}`)} />)}

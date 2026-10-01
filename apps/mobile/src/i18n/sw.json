@@ -240,5 +240,15 @@
   "payout.queued": "Kwenye foleni",
   "payout.sent": "Inatumwa",
   "payout.confirmed": "Imelipwa",
-  "payout.failed": "Imeshindwa — imerudi kwenye mapato"
+  "payout.failed": "Imeshindwa — imerudi kwenye mapato",
+  "notify.title": "Jua wakati muhimu",
+  "notify.body_requester": "Tutakujulisha kibanda kinapopigwa picha na kusubiri idhini yako, na bidhaa zako zikiwa njiani.",
+  "notify.body_runner": "Ofa hudumu sekunde 90. Washa arifa usikose hata moja.",
+  "notify.cta": "Washa arifa",
+  "notify.later": "Si sasa",
+  "notify.blocked": "Arifa zimezimwa kwa Side Qwest. Ziwashe kwenye Mipangilio ili upate habari za idhini na ofa.",
+  "notify.settings": "Fungua Mipangilio",
+  "live.map_runner": "{name} yuko umbali wa {distance}",
+  "live.map_waiting": "Inasubiri mahali alipo {name}",
+  "live.map_dropoff": "Mahali pa kupokea"
 }

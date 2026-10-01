@@ -90,7 +90,7 @@ export const api = {
   get: <T>(path: string, opts?: RequestOptions) => request<T>('GET', path, undefined, opts),
   post: <T>(path: string, body?: unknown, opts?: RequestOptions) => request<T>('POST', path, body ?? {}, opts),
   patch: <T>(path: string, body?: unknown, opts?: RequestOptions) => request<T>('PATCH', path, body ?? {}, opts),
-  delete: <T>(path: string, opts?: RequestOptions) => request<T>('DELETE', path, undefined, opts),
+  delete: <T>(path: string, body?: unknown, opts?: RequestOptions) => request<T>('DELETE', path, body, opts),
   /** PUT raw bytes to a presigned upload URL (storage, not the API). */
   async upload(url: string, headers: Record<string, string>, fileUri: string): Promise<void> {
     const blob = await (await fetch(fileUri)).blob();

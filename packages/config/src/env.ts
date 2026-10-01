@@ -127,6 +127,11 @@ const Env = z.object({
   AT_API_KEY: secret(24).optional(),
   AT_SENDER_ID: z.string().default('SIDEQWEST'),
 
+  /** Push through Expo's service (APNs + FCM). `console` records instead; refused in production. */
+  PUSH_DRIVER: z.enum(['console', 'expo']).default('console'),
+  /** Only needed if the Expo project turns on "enhanced push security". */
+  EXPO_ACCESS_TOKEN: secret(24).optional(),
+
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
 
   // Product knobs that operations changes without a deploy would be nice, but for the MVP
@@ -182,6 +187,7 @@ const Env = z.object({
     if (v.STORAGE_DRIVER === 'local') fail('Refusing to boot production with local file storage');
     if (v.DARAJA_DRIVER === 'fake') fail('Refusing to boot production with the fake M-Pesa driver');
     if (v.SMS_DRIVER === 'console') fail('Refusing to boot production with SMS printed to the console');
+    if (v.PUSH_DRIVER === 'console') fail('Refusing to boot production with push notifications printed to the console');
     const opsUser = (() => { try { return new URL(v.OPS_DATABASE_URL).username; } catch { return ''; } })();
     if (opsUser !== 'sidequest_ops') fail('OPS_DATABASE_URL must connect as sidequest_ops');
     if (v.WORKER_DATABASE_URL) {
@@ -209,7 +215,7 @@ const Env = z.object({
 const SECRET_KEYS = new Set([
   'JWT_SECRET', 'HANDOVER_SECRET', 'OPS_DATABASE_URL', 'WORKER_DATABASE_URL', 'COOKIE_SECRET', 'KYC_ENCRYPTION_KEY', 'R2_SECRET_ACCESS_KEY',
   'DARAJA_CONSUMER_SECRET', 'DARAJA_PASSKEY', 'DARAJA_B2C_CREDENTIAL', 'DARAJA_CALLBACK_TOKEN',
-  'ISSUER_API_KEY', 'ISSUER_WEBHOOK_SECRET', 'AT_API_KEY', 'DATABASE_URL', 'REDIS_URL',
+  'ISSUER_API_KEY', 'ISSUER_WEBHOOK_SECRET', 'AT_API_KEY', 'EXPO_ACCESS_TOKEN', 'DATABASE_URL', 'REDIS_URL',
 ]);
 
 /** Safe to print. Use this in the boot banner and anywhere config is attached to telemetry. */

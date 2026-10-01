@@ -10,7 +10,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
-import { OtpRequest, OtpVerify, RefreshRequest, PatchMe, type Me, type Session } from '@sidequest/contracts';
+import { OtpRequest, OtpVerify, RefreshRequest, PatchMe, PushTokenBody, type Me, type Session } from '@sidequest/contracts';
 import { cleanMsisdn, cleanName, InvalidTextError } from '@sidequest/domain/text/sanitize';
 import { entitlementsFor, type Entitlement, type Tier } from '@sidequest/domain/kyc/entitlements';
 import { withActor, setScope, type Tx } from '@sidequest/db';
@@ -241,6 +241,22 @@ export default async function authRoutes(app: FastifyInstance) {
     if (!a) throw new AppError(404, 'NOT_FOUND', 'Account not found');
     return a;
   }
+
+  // ─────────────────────────────────────────── push tokens
+
+  /** Register this device for push. A token held by another account moves to this one. */
+  app.post('/me/push-token', { preHandler: [app.requireAuth, app.limit(LIMITS.writes)] }, async (req, reply) => {
+    const { token, platform } = parse(PushTokenBody, req.body);
+    await app.tx(req, (tx) => tx`SELECT app_claim_push_token(${token}, ${platform})`);
+    return reply.code(204).send();
+  });
+
+  /** Signing out: this device stops receiving this account's notifications. */
+  app.delete('/me/push-token', { preHandler: [app.requireAuth, app.limit(LIMITS.writes)] }, async (req, reply) => {
+    const { token } = parse(PushTokenBody.pick({ token: true }), req.body);
+    await app.tx(req, (tx) => tx`DELETE FROM push_token WHERE token = ${token}`);
+    return reply.code(204).send();
+  });
 
   app.get('/me', { preHandler: app.requireAuth }, async (req) => toMe(await app.tx(req, (tx) => loadMe(req, tx))));
 

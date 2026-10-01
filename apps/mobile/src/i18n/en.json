@@ -240,5 +240,15 @@
   "payout.queued": "Queued",
   "payout.sent": "Sending",
   "payout.confirmed": "Paid",
-  "payout.failed": "Failed — back in earnings"
+  "payout.failed": "Failed — back in earnings",
+  "notify.title": "Know the moment it matters",
+  "notify.body_requester": "We'll tell you when a stall is photographed and waiting for your approval, and when your goods are on the way.",
+  "notify.body_runner": "Offers last 90 seconds. Turn on notifications so you never miss one.",
+  "notify.cta": "Turn on notifications",
+  "notify.later": "Not now",
+  "notify.blocked": "Notifications are off for Side Qwest. Turn them on in Settings to hear about approvals and offers.",
+  "notify.settings": "Open Settings",
+  "live.map_runner": "{name} is {distance} away",
+  "live.map_waiting": "Waiting for {name}'s location",
+  "live.map_dropoff": "Drop-off"
 }

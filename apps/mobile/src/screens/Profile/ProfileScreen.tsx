@@ -7,6 +7,7 @@ import type { Me } from '@sidequest/contracts';
 import { useT } from '../../i18n/useT';
 import { api, restoreSession } from '../../lib/api';
 import { useSession } from '../../lib/session';
+import { unregisterPush } from '../../lib/push';
 import { useKyc } from '../../features/errands/hooks';
 import { Screen } from '../../components/Screen';
 import { Card, Chip, Eyebrow, Heading, Meta, PrimaryButton, SecondaryButton, Notice } from '../../components/ui';
@@ -57,7 +58,7 @@ export function ProfileScreen() {
       <View style={{ flexDirection: 'row', marginTop: 12 }}>
         <SecondaryButton label={T('profile.sign_out')} onPress={async () => {
           await api.post('/auth/logout').catch(() => undefined);
-          await signOut(); qc.clear(); router.replace('/sign-in');
+          await unregisterPush(); await signOut(); qc.clear(); router.replace('/sign-in');
         }} />
       </View>
     </Screen>

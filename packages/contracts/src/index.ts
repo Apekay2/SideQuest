@@ -44,6 +44,10 @@ export const OtpVerify = z.object({
   /** The ops console sets this: never create an account, and issue a session only to staff. */
   staff_only: z.boolean().optional(),
 });
+export const PushTokenBody = z.object({
+  token: z.string().regex(/^Expo(nent)?PushToken\[[A-Za-z0-9_-]{10,64}\]$/, 'Not an Expo push token'),
+  platform: z.enum(['ios', 'android']),
+});
 export const RefreshRequest = z.object({ refresh: z.string().min(20).max(200).optional() });
 export const PatchMe = z.object({
   display_name: z.string().min(1).max(48).optional(),

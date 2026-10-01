@@ -40,7 +40,7 @@ export class Client {
   post<T = any>(url: string, body?: unknown, opts?: { idem?: string | false; headers?: Record<string, string> }) { return this.req<T>('POST', url, body ?? {}, opts); }
   patch<T = any>(url: string, body?: unknown) { return this.req<T>('PATCH', url, body ?? {}); }
   put<T = any>(url: string, body?: unknown) { return this.req<T>('PUT', url, body ?? {}); }
-  delete<T = any>(url: string) { return this.req<T>('DELETE', url); }
+  delete<T = any>(url: string, body?: unknown) { return this.req<T>('DELETE', url, body); }
 }
 
 export const NAIROBI = {
