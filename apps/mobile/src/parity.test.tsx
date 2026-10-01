@@ -43,9 +43,16 @@ const errand = (over: Partial<ErrandDetail> = {}): ErrandDetail => ({
   ...over,
 });
 
+// gcTime: Infinity schedules no garbage-collection timer (the default is a 5-minute one per
+// query), and clear() after each test drops the cache. Without both, the timers keep an
+// in-band Jest process alive after the last test — how CI's single-worker run hung.
+const clients: QueryClient[] = [];
+afterEach(() => { for (const c of clients.splice(0)) c.clear(); });
+
 async function renderSheet(e: ErrandDetail) {
   api.get.mockResolvedValue(e);
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { gcTime: Infinity } } });
+  clients.push(qc);
   return await render(
     <QueryClientProvider client={qc}>
       <StallApprovalSheet errandId="e1" stallId="s2" onClose={jest.fn()} />

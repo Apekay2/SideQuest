@@ -91,10 +91,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0        # history too: a rotated-but-committed key is still a leak
-      - uses: gitleaks/gitleaks-action@v2
+      # The gitleaks binary itself, pinned and checksum-verified, over the full history: the
+      # same command a contributor runs locally. (gitleaks-action needs pull-requests access to
+      # list PR commits in a private repo; this needs none.) .gitleaksignore is honoured.
+      - name: gitleaks (full history)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+          GITLEAKS_VERSION: 8.28.0
+          GITLEAKS_SHA256: a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb
+        run: |
+          set -euo pipefail
+          curl -sSfL -o /tmp/gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          /tmp/gitleaks git --redact --no-banner --exit-code 1 .
       - name: no committed .env or database dumps
         run: |
           set -euo pipefail
