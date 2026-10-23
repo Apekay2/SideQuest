@@ -19,8 +19,11 @@ import { parse } from '../lib/validate.js';
 async function owed(tx: Tx, me: string) {
   const wallet = await ledgerBalance(tx, { account: 'user_wallet', ownerId: me });
   const earnings = await ledgerBalance(tx, { account: 'runner_earnings', ownerId: me });
+  // An expired M-Pesa prompt still counts for a day: a late success is credited to the wallet
+  // (payments.ts onStk), and an erased account's wallet is money nobody can withdraw.
   const [p] = await tx<{ n: number }[]>`
-    SELECT count(*)::int AS n FROM payment WHERE account_id = ${me} AND status IN ('initiated', 'pending')`;
+    SELECT count(*)::int AS n FROM payment WHERE account_id = ${me}
+       AND (status IN ('initiated', 'pending') OR (status = 'expired' AND created_at > now() - interval '24 hours'))`;
   const [q] = await tx<{ n: number }[]>`
     SELECT count(*)::int AS n FROM payout WHERE runner_id = ${me} AND status IN ('queued', 'sent')`;
   return { wallet_cents: Number(wallet), earnings_cents: Number(earnings), payments_in_flight: p!.n + q!.n };

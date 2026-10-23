@@ -196,6 +196,27 @@ describe('a rail timeout is not a refusal', () => {
     expect(p!.status).toBe('pending');
   });
 
+  test('after expiry a late failure changes nothing, and the account cannot be erased for a day', async () => {
+    const u = await w.requester('Late Lou');
+    const r = await u.client.post('/wallet/topup', { amount_cents: 40_000 });
+    await pushTimesOut();
+    await w.admin`UPDATE payment SET expires_at = now() - interval '2 hours' WHERE id = ${r.body.payment_id}`;
+    await expireUnansweredPushes(w.worker);
+    // A late cancel: the customer has already been told this push failed.
+    await w.admin`INSERT INTO outbox_event (queue, payload) VALUES ('mpesa.callback', ${w.admin.json({
+      kind: 'stk', ref: r.body.payment_id, body: { Body: { stkCallback: {
+        MerchantRequestID: 'm1', CheckoutRequestID: 'ws_CO_late_cancel', ResultCode: 1032, ResultDesc: 'Request cancelled by user',
+      } } },
+    })})`;
+    await w.settle();
+    const [p] = await w.admin`SELECT status FROM payment WHERE id = ${r.body.payment_id}`;
+    expect(p!.status).toBe('expired');
+    // A late success would still be credited to the wallet, so erasure waits.
+    const del = await u.client.post('/me/delete', { confirm: 'DELETE' });
+    expect(del.status).toBe(409);
+    expect(del.body.code).toBe('ACCOUNT_HAS_BALANCE');
+  });
+
   test('an interrupted issuer load is re-asked less and less often, never every 5 s for ever', () => {
     expect(unknownRetryDelaySeconds(0)).toBe(5);
     expect(unknownRetryDelaySeconds(10 * 60_000)).toBe(100);

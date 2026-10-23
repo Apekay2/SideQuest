@@ -14,7 +14,7 @@ import { nextStatus } from '@sidequest/domain/errand/machine';
 import { cents } from '@sidequest/domain/money/money';
 import { parseCallback } from '@sidequest/adapters';
 import { isDefinitiveRejection } from '@sidequest/domain/rails/mpesa.port';
-import { metrics } from '@sidequest/observability';
+import { logger, metrics } from '@sidequest/observability';
 import { type Handler, type JobContext, type WorkerDeps, publish, later, str } from '../context.js';
 import { completeTranche } from './card-load.job.js';
 
@@ -93,20 +93,30 @@ export const PUSH_EXPIRE_AFTER_MINUTES = 60;
  * customer is told. A callback that still turns up is not lost: onStk treats `expired` as open,
  * so a late success is credited.
  */
-export async function expireUnansweredPushes(deps: WorkerDeps, limit = 200): Promise<number> {
-  const rows = await deps.sql<{ id: string; account_id: string; errand_id: string | null }[]>`
-    UPDATE payment SET status = 'expired'
-     WHERE id IN (SELECT id FROM payment
-                   WHERE provider = 'daraja' AND direction = 'in' AND status IN ('initiated', 'pending')
-                     AND COALESCE(expires_at, created_at) < now() - make_interval(mins => ${PUSH_EXPIRE_AFTER_MINUTES})
-                   ORDER BY created_at LIMIT ${limit}
-                   FOR UPDATE SKIP LOCKED)
-    RETURNING id, account_id, errand_id`;
-  for (const p of rows) {
-    await publish(deps, p.account_id, 'payment.failed', { payment_id: p.id, errand_id: p.errand_id, reason: 'expired' });
+export async function expireUnansweredPushes(deps: WorkerDeps, batch = 200, maxBatches = 50): Promise<number> {
+  let total = 0;
+  // Batch after batch while a full one comes back, so a backlog clears in one run; bounded, so a
+  // run always ends. SKIP LOCKED keeps two workers off the same rows.
+  for (let i = 0; i < maxBatches; i++) {
+    const rows = await deps.sql<{ id: string; account_id: string; errand_id: string | null }[]>`
+      UPDATE payment SET status = 'expired'
+       WHERE id IN (SELECT id FROM payment
+                     WHERE provider = 'daraja' AND direction = 'in' AND status IN ('initiated', 'pending')
+                       AND COALESCE(expires_at, created_at) < now() - make_interval(mins => ${PUSH_EXPIRE_AFTER_MINUTES})
+                     ORDER BY created_at LIMIT ${batch}
+                     FOR UPDATE SKIP LOCKED)
+      RETURNING id, account_id, errand_id`;
+    // The status is the record; this is the live nudge to an open app, as for every payment
+    // event (publish is Redis pub/sub). One that fails must not cost the others theirs.
+    for (const p of rows) {
+      await publish(deps, p.account_id, 'payment.failed', { payment_id: p.id, errand_id: p.errand_id, reason: 'expired' })
+        .catch((err) => logger.warn({ err, paymentId: p.id }, 'payment.failed not published'));
+    }
+    total += rows.length;
+    if (rows.length < batch) break;
   }
-  if (rows.length) metrics.increment('mpesa.push_expired', {}, rows.length);
-  return rows.length;
+  if (total) metrics.increment('mpesa.push_expired', {}, total);
+  return total;
 }
 
 /** Every Daraja callback lands here, from the webhook route or from the fake driver. */
@@ -145,6 +155,9 @@ async function onStk(ctx: JobContext, r: NonNullable<ReturnType<typeof parseCall
     }
     if (!p) { metrics.increment('mpesa.callback_unmatched', { kind: 'stk' }); return null; }
     if (p.status === 'confirmed' || p.status === 'failed') return null;   // duplicate callback
+    // Expired stays open for a late success only: the customer has already been told this push
+    // failed, so a late cancel or timeout changes nothing and says nothing.
+    if (p.status === 'expired' && !r.ok) return null;
     if (!r.ok) {
       await tx`UPDATE payment SET status = 'failed', failure_code = ${r.resultCode} WHERE id = ${p.id}`;
       return { p, ok: false as const };
