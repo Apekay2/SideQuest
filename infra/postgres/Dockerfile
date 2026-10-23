@@ -10,6 +10,7 @@
 # changing the distribution underneath us again.
 FROM postgres:16-bookworm
 RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends \
       postgresql-16-postgis-3 \
       postgresql-16-postgis-3-scripts \
