@@ -29,6 +29,46 @@ export interface MpesaResult {
   resultDesc: string;
   amountCents: number | null;
   receipt: string | null;
+  /**
+   * Till and B2C results: the OriginatorConversationID we sent, `till:<idemKey>` or
+   * `b2c:<idemKey>`. It is how a result is matched when the request that started it timed out
+   * before Safaricom's ConversationID reached us.
+   */
+  originator?: string | null;
+  /** STK results: the paying number (E.164 without '+', as Safaricom reports it). */
+  msisdn?: string | null;
+}
+
+/**
+ * The rail said no. Nothing was started, so it is safe to undo our side (reverse a debit, try
+ * the next rung, tell the customer the push failed).
+ */
+export class MpesaRejectedError extends Error {
+  readonly code = 'MPESA_REJECTED';
+  constructor(message: string, readonly status: number | null = null) {
+    super(message);
+    this.name = 'MpesaRejectedError';
+  }
+}
+
+/**
+ * We do not know what happened: a timeout, a dropped connection, a 5xx, an unreadable reply.
+ * Safaricom may have accepted the request and will send its result to the callback URL. The
+ * caller MUST NOT undo anything on this error — reversing a payout that in fact went out pays
+ * the runner twice — and must leave the operation open for the callback (matched by its
+ * originator id) or a human to close.
+ */
+export class MpesaUnknownOutcomeError extends Error {
+  readonly code = 'MPESA_OUTCOME_UNKNOWN';
+  constructor(message: string) {
+    super(message);
+    this.name = 'MpesaUnknownOutcomeError';
+  }
+}
+
+/** True only for an error that proves the rail did nothing. Anything unrecognised is unknown. */
+export function isDefinitiveRejection(err: unknown): boolean {
+  return err instanceof MpesaRejectedError || err instanceof MpesaAmountError;
 }
 
 export class MpesaAmountError extends Error {

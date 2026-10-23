@@ -174,6 +174,15 @@ export default async function stallRoutes(app: FastifyInstance) {
       assertRequester(e, req.actor!.id);
       const s = await stallOfErrand(tx, id, sid);
 
+      // Money moves out of escrow only while the run is in progress. A dispute or an SOS
+      // freezes the errand; an approval tapped in that window used to move escrow onto the card
+      // anyway, because nothing on this path looked at the errand's state or the freeze.
+      if (e.status !== 'shopping' && e.status !== 'awaiting_approval') {
+        throw new AppError(409, 'ERRAND_STATE_INVALID', 'This errand is not taking approvals now');
+      }
+      const [esc] = await tx<{ frozen_at: Date | null }[]>`SELECT frozen_at FROM escrow WHERE errand_id = ${id}`;
+      if (esc?.frozen_at) throw new AppError(409, 'ESCROW_FROZEN', 'This errand is frozen while it is reviewed');
+
       let plan;
       try {
         plan = planTranche(

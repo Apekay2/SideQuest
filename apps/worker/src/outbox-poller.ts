@@ -47,8 +47,11 @@ export async function claim(sql: Sql, opts: { ignoreDelay?: boolean; limit?: num
   return rows.map(({ event_id, ...r }) => ({ ...r, id: String(r.id), eventId: event_id })).sort((a, b) => Number(a.id) - Number(b.id));
 }
 
+/** Told when a row is parked, so a person hears about it (alert.ts) and not only the logs. */
+export type OnPark = (row: OutboxRow, reason: string) => void | Promise<void>;
+
 /** Dispatch one claimed row; mark it done, or release/park it on failure. */
-export async function settleRow(sql: Sql, row: OutboxRow, known: ReadonlySet<string>, dispatch: Dispatch): Promise<'done' | 'retry' | 'parked'> {
+export async function settleRow(sql: Sql, row: OutboxRow, known: ReadonlySet<string>, dispatch: Dispatch, onPark?: OnPark): Promise<'done' | 'retry' | 'parked'> {
   const log = logger.child({ component: 'outbox', id: row.id, queue: row.queue });
   // An unknown queue name is a deploy-order bug, not a transient fault. Park it so it is
   // visible and countable, rather than logged once and forgotten. It used to be marked
@@ -57,6 +60,7 @@ export async function settleRow(sql: Sql, row: OutboxRow, known: ReadonlySet<str
     await sql`UPDATE outbox_event SET parked_at = now(), last_error = 'unknown queue' WHERE id = ${row.id}`;
     log.error('unknown queue, row parked');
     metrics.increment('outbox.parked', { reason: 'unknown_queue' });
+    await onPark?.(row, 'unknown queue');
     return 'parked';
   }
   try {
@@ -78,18 +82,38 @@ export async function settleRow(sql: Sql, row: OutboxRow, known: ReadonlySet<str
        WHERE id = ${row.id}`;
     log.error({ err, attempts: row.attempts, parked }, 'dispatch failed');
     metrics.increment(parked ? 'outbox.parked' : 'outbox.dispatch_failed', { queue: row.queue });
+    if (parked) await onPark?.(row, String((err as Error)?.message ?? err).slice(0, 200));
     return parked ? 'parked' : 'retry';
   }
 }
 
-export function startOutboxPoller(sql: Sql, known: ReadonlySet<string>, dispatch: Dispatch) {
+export interface PollerOptions {
+  /**
+   * False while the queue cannot accept work (Redis down). Claiming then would only burn
+   * attempts: every row's dispatch fails, its counter climbs, and after MAX_ATTEMPTS (about
+   * nine minutes of backoff) it parks — so a Redis outage of ten minutes used to park every
+   * card load and settlement in flight, each needing a person to replay it. While not ready,
+   * the poller simply waits; the rows stay in the table, which is the point of an outbox.
+   */
+  ready?: () => boolean;
+  onPark?: OnPark;
+}
+
+export function startOutboxPoller(sql: Sql, known: ReadonlySet<string>, dispatch: Dispatch, opts: PollerOptions = {}) {
   let stopped = false;
   let ticking = false;              // no overlapping ticks in one process
+  let waitingLogged = false;
   const log = logger.child({ component: 'outbox' });
 
   async function tick() {
+    if (opts.ready && !opts.ready()) {
+      if (!waitingLogged) { log.warn('queue unavailable; outbox rows wait in the table until it returns'); waitingLogged = true; }
+      metrics.increment('outbox.waiting_for_queue');
+      return;
+    }
+    waitingLogged = false;
     const rows = await claim(sql);
-    for (const row of rows) await settleRow(sql, row, known, dispatch);
+    for (const row of rows) await settleRow(sql, row, known, dispatch, opts.onPark);
     if (rows.length > 0) log.debug({ n: rows.length }, 'dispatched');
   }
 
@@ -126,6 +150,6 @@ export function startOutboxPoller(sql: Sql, known: ReadonlySet<string>, dispatch
     clearInterval(loop);
     clearInterval(lagLoop);
     while (ticking) await new Promise((r) => setTimeout(r, 25));
-    await tick(); // final drain
+    await tick().catch((err) => log.error({ err }, 'final outbox drain failed')); // final drain
   };
 }

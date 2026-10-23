@@ -12,12 +12,16 @@
 import { useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import type { LinkState, LocationView } from '@sidequest/contracts';
-import { api } from './api';
+import { api, ApiError } from './api';
 import { onRealtime } from './realtime';
 import { secureStore } from '../platform/adaptive';
 import { newKeyPair, deriveSecret, linkHash, tagFix, verifyTag, toB64, fromB64, type Fix } from './link';
 
 const FIX_EVERY_MS = 15_000;
+const LINK_POLL_MIN_MS = 3_000;
+const LINK_POLL_MAX_MS = 30_000;
+/** Answers that waiting will not change: stop the handshake and show location as unavailable. */
+const LINK_TERMINAL = new Set(['LINK_MISMATCH', 'LINK_KEY_SET', 'LINK_REVOKED', 'ERRAND_STATE_INVALID', 'NOT_FOUND', 'FORBIDDEN']);
 
 export interface PeerFix { lat: number; lng: number; at: string; verified: boolean }
 
@@ -33,28 +37,45 @@ async function keysFor(errandId: string) {
 }
 
 export function useLink(errandId: string | undefined, role: 'requester' | 'runner' | null, live: boolean) {
-  const [state, setState] = useState<LinkState['state'] | 'off'>('off');
+  const [state, setState] = useState<LinkState['state'] | 'off' | 'failed'>('off');
   const [peer, setPeer] = useState<PeerFix | null>(null);
   const secret = useRef<Uint8Array | null>(null);
   const lastSeq = useRef(0);
 
-  // Handshake.
+  // Handshake. Polls while waiting for the other phone, backing off from 3 s to 30 s, and stops
+  // for good on an answer that waiting cannot change. It used to poll every 3 s for as long as
+  // the screen was open — and on a permanent LINK_MISMATCH (a reinstalled app whose keystore no
+  // longer holds the key the server recorded) it re-posted the same failing ack every 3 s,
+  // spending the account's write budget, for ever.
   useEffect(() => {
     if (!errandId || !role || !live) return;
     let stop = false;
     (async () => {
       const k = await keysFor(errandId);
-      let v = await api.post<LinkState>(`/errands/${errandId}/link`, { public_key: toB64(k.publicKey) }).catch(() => null);
-      while (!stop && v && v.state !== 'active' && v.state !== 'revoked') {
-        setState(v.state);
-        if (v.counterpart_key) {
-          const theirs = fromB64(v.counterpart_key);
-          secret.current = deriveSecret(k.secretKey, theirs);
-          const [reqPub, runPub] = role === 'requester' ? [k.publicKey, theirs] : [theirs, k.publicKey];
-          v = await api.post<LinkState>(`/errands/${errandId}/link/ack`, { link_hash: toB64(linkHash(reqPub, runPub, errandId)) }).catch(() => v);
-          if (v?.state === 'active') break;
+      let delay = LINK_POLL_MIN_MS;
+      let acked = false;
+      let v: LinkState | null = null;
+      while (!stop) {
+        try {
+          // (Re)publish until the server has our key; it is idempotent for the same key.
+          v ??= await api.post<LinkState>(`/errands/${errandId}/link`, { public_key: toB64(k.publicKey) });
+          if (v.state === 'active' || v.state === 'revoked') break;
+          setState(v.state);
+          if (v.counterpart_key && !acked) {
+            const theirs = fromB64(v.counterpart_key);
+            secret.current = deriveSecret(k.secretKey, theirs);
+            const [reqPub, runPub] = role === 'requester' ? [k.publicKey, theirs] : [theirs, k.publicKey];
+            v = await api.post<LinkState>(`/errands/${errandId}/link/ack`, { link_hash: toB64(linkHash(reqPub, runPub, errandId)) });
+            acked = true;                    // one ack per key pair; then wait for theirs
+            if (v.state === 'active') break;
+          }
+        } catch (e) {
+          if (e instanceof ApiError && LINK_TERMINAL.has(e.code)) { if (!stop) setState('failed'); return; }
+          // Network or a transient server error: keep waiting, with the same backoff.
         }
-        await new Promise((r) => setTimeout(r, 3000));
+        await new Promise((r) => setTimeout(r, delay));
+        delay = Math.min(delay * 2, LINK_POLL_MAX_MS);
+        if (stop) return;
         v = await api.get<LinkState>(`/errands/${errandId}/link`).catch(() => v);
       }
       if (!stop && v) {

@@ -117,7 +117,12 @@ const Env = z.object({
    *  verification, so a forged confirmation never reaches the money path. */
   DARAJA_SOURCE_CIDRS: z.string().default('').transform((s) => s.split(',').map((x) => x.trim()).filter(Boolean)),
 
-  ISSUER_DRIVER: z.enum(['mock', 'union']).default('mock'),
+  /**
+   * `none`: no card partner — the decline ladder starts at the vendor's M-Pesa till (the
+   * pilot configuration). `union` is reserved for the issuing partner; its adapter is not in
+   * this build, and the worker refuses to start with it rather than fall back to the mock.
+   */
+  ISSUER_DRIVER: z.enum(['mock', 'none', 'union']).default('mock'),
   ISSUER_BASE_URL: z.string().url().optional(),
   ISSUER_API_KEY: secret(24).optional(),
   ISSUER_WEBHOOK_SECRET: secret(32).optional(),
@@ -152,6 +157,25 @@ const Env = z.object({
   AUCTION_MAX_MINUTES: z.coerce.number().int().default(60),
   REIMBURSEMENT_WINDOW_MS: z.coerce.number().int().default(300_000),
   MAX_EVIDENCE_ATTEMPTS: z.coerce.number().int().default(2),
+  /** How long after handover a party may still dispute a settled errand. */
+  DISPUTE_WINDOW_HOURS: z.coerce.number().int().min(1).max(720).default(72),
+
+  // ── safety and alerting (production readiness audit, 2026-10-23)
+  /**
+   * Phone numbers (E.164, comma-separated) paged by SMS the moment an SOS is raised, and again
+   * every minute until someone acknowledges it in the console. Required in production: an SOS
+   * that only writes a log line is not a safety feature.
+   */
+  SAFETY_ONCALL_MSISDNS: z.string().default('').transform((s) => s.split(',').map((x) => x.trim()).filter(Boolean))
+    .pipe(z.array(z.string().regex(/^\+\d{9,15}$/, 'E.164, e.g. +254700000000'))),
+  /**
+   * Optional: an HTTPS endpoint that receives a JSON POST for every page-worthy event (SOS,
+   * reconciliation findings, a parked outbox job, a stuck errand). Point it at the on-call
+   * tool's incoming webhook (Slack, PagerDuty Events, Opsgenie…).
+   */
+  ALERT_WEBHOOK_URL: z.string().url().optional(),
+  /** Optional bearer for /health/metrics. Without it, metrics answer only private addresses. */
+  METRICS_TOKEN: secret(24).optional(),
 }).superRefine((v, ctx) => {
   const fail = (message: string) => ctx.addIssue({ code: 'custom', message });
 
@@ -211,6 +235,8 @@ const Env = z.object({
       if (w !== 'sidequest_worker') fail('WORKER_DATABASE_URL must connect as sidequest_worker');
     }
     if (v.HANDOVER_SECRET === v.JWT_SECRET) fail('secrets must not be reused across purposes');
+    if (v.SAFETY_ONCALL_MSISDNS.length === 0) fail('SAFETY_ONCALL_MSISDNS must be set in production: an SOS has to page a person');
+    if (v.ALERT_WEBHOOK_URL && !v.ALERT_WEBHOOK_URL.startsWith('https://')) fail('ALERT_WEBHOOK_URL must use https');
   }
 
   if (v.ISSUER_DRIVER === 'union' && (!v.ISSUER_BASE_URL || !v.ISSUER_API_KEY)) {
@@ -232,6 +258,7 @@ const SECRET_KEYS = new Set([
   'JWT_SECRET', 'HANDOVER_SECRET', 'OPS_DATABASE_URL', 'WORKER_DATABASE_URL', 'COOKIE_SECRET', 'KYC_ENCRYPTION_KEY', 'R2_SECRET_ACCESS_KEY',
   'DARAJA_CONSUMER_SECRET', 'DARAJA_PASSKEY', 'DARAJA_B2C_CREDENTIAL', 'DARAJA_CALLBACK_TOKEN',
   'ISSUER_API_KEY', 'ISSUER_WEBHOOK_SECRET', 'AT_API_KEY', 'EXPO_ACCESS_TOKEN', 'REVIEW_LOGIN_CODE', 'DATABASE_URL', 'REDIS_URL',
+  'ALERT_WEBHOOK_URL', 'METRICS_TOKEN', 'SAFETY_ONCALL_MSISDNS',
 ]);
 
 /** Safe to print. Use this in the boot banner and anywhere config is attached to telemetry. */
@@ -247,7 +274,11 @@ let cached: Config | null = null;
 
 /** Parse and validate an environment. Pure: tests call it with a fabricated env. */
 export function loadConfig(env: Record<string, string | undefined>): Config {
-  const parsed = Env.safeParse(env);
+  // A blank line in an env file (`ALERT_WEBHOOK_URL=`) means "not set", as dotenv tools treat
+  // it. Parsed as an empty string it failed every optional URL or regex field, so a copy of
+  // .env.example could not boot even with every required value filled in.
+  const present = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== undefined && v.trim() !== ''));
+  const parsed = Env.safeParse(present);
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  ${i.path.join('.') || '(config)'}: ${i.message}`);
     throw new Error(`Invalid environment:\n${lines.join('\n')}`);

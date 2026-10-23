@@ -84,6 +84,19 @@ export default async function safetyRoutes(app: FastifyInstance) {
       if (!by) throw notFound('Errand not found');
       const open = await tx`SELECT 1 FROM dispute WHERE errand_id = ${e.id} AND status IN ('open','evidence')`;
       if (open.length) throw new AppError(409, 'DISPUTE_OPEN', 'There is already an open dispute on this errand');
+      // One ruling per errand. A settled errand could be disputed again the moment its ruling
+      // closed — settled → disputed → settled, as often as a party liked — re-freezing it and
+      // re-queueing it for Legal Operations each time. A ruling is the platform's answer; a
+      // challenge to it goes to support, not back into the queue.
+      const ruled = await tx`SELECT 1 FROM dispute WHERE errand_id = ${e.id} AND status IN ('ruled','closed')`;
+      if (ruled.length) throw new AppError(409, 'ALREADY_RULED', 'This errand has already had a ruling. Contact support to appeal it.');
+      // After handover there is a window to complain, not an open-ended one.
+      if (e.status === 'settled') {
+        const closesAt = (e.handover_at?.getTime() ?? 0) + app.deps.cfg.DISPUTE_WINDOW_HOURS * 3600_000;
+        if (Date.now() > closesAt) {
+          throw new AppError(409, 'DISPUTE_WINDOW_CLOSED', `Disputes close ${app.deps.cfg.DISPUTE_WINDOW_HOURS} hours after handover. Contact support.`);
+        }
+      }
       if (!canTransition(e.status, 'raise_dispute', by)) {
         throw new AppError(409, 'ERRAND_STATE_INVALID', 'This errand cannot be disputed now');
       }

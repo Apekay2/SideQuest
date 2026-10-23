@@ -27,6 +27,7 @@ function prodEnv(): Record<string, string> {
     ISSUER_DRIVER: 'union', ISSUER_BASE_URL: 'https://issuer.example-bank.co.ke', ISSUER_API_KEY: s(32),
     ISSUER_WEBHOOK_SECRET: s(),
     SMS_DRIVER: 'africastalking', AT_USERNAME: 'sidequest', AT_API_KEY: s(32),
+    SAFETY_ONCALL_MSISDNS: '+254700000101,+254700000102',
   };
 }
 
@@ -50,6 +51,9 @@ describe('config refusals', () => {
     ['local storage', { STORAGE_DRIVER: 'local' }],
     ['console SMS', { SMS_DRIVER: 'console' }],
     ['ops pool as the app role', { OPS_DATABASE_URL: 'postgres://sidequest_app:x@db/sq?sslmode=verify-full' }],
+    ['no safety on-call to page', { SAFETY_ONCALL_MSISDNS: '' }],
+    ['an on-call number that is not E.164', { SAFETY_ONCALL_MSISDNS: '0712345678' }],
+    ['a plaintext alert webhook', { ALERT_WEBHOOK_URL: 'http://hooks.example.net/x' }],
   ])('production refuses to boot with %s', (_label, override) => {
     expect(() => loadConfig({ ...prodEnv(), ...override })).toThrow();
   });
@@ -106,3 +110,15 @@ describe('placeholder detection', () => {
     expect(refused).toEqual([]);
   });
 });
+
+describe('blank values', () => {
+  test('a blank optional line means unset, not an invalid value', () => {
+    expect(() => loadConfig({
+      ...prodEnv(), ALERT_WEBHOOK_URL: '', OTEL_EXPORTER_OTLP_ENDPOINT: '', REVIEW_LOGIN_MSISDN: '', REVIEW_LOGIN_CODE: '', METRICS_TOKEN: '',
+    })).not.toThrow();
+  });
+  test('a blank required value is still refused', () => {
+    expect(() => loadConfig({ ...prodEnv(), JWT_SECRET: '' })).toThrow(/JWT_SECRET/);
+  });
+});
+

@@ -7,9 +7,11 @@ import { Redis } from 'ioredis';
 import { Queue, Worker, type Job } from 'bullmq';
 import type { Config } from '@sidequest/config';
 import { createDb, enqueueOutbox, type Sql } from '@sidequest/db';
-import { MockIssuer, FakeMpesa, Daraja, ConsoleSms, AfricasTalkingSms, ConsolePush, ExpoPush, LocalStorage, R2Storage } from '@sidequest/adapters';
+import { MockIssuer, NoCardIssuer, FakeMpesa, Daraja, ConsoleSms, AfricasTalkingSms, ConsolePush, ExpoPush, LocalStorage, R2Storage } from '@sidequest/adapters';
+import type { IssuerPort } from '@sidequest/domain/card/issuer.port';
 import { logger } from '@sidequest/observability';
 import type { WorkerDeps, JobContext } from './context.js';
+import { makeAlerter } from './alert.js';
 import { HANDLERS } from './handlers.js';
 import { claim, settleRow, startOutboxPoller, type OutboxRow } from './outbox-poller.js';
 
@@ -31,7 +33,7 @@ export function buildWorkerDeps(cfg: Config, over: Partial<WorkerDeps> = {}): Wo
     redis,
     // In development the mock spends each load at once, as a runner paying the exact stall
     // total would; tests drive spending explicitly with simulateSpend.
-    issuer: over.issuer ?? new MockIssuer(redis, { autoSpend: cfg.NODE_ENV === 'development' }),
+    issuer: over.issuer ?? issuerFor(cfg, redis),
     mpesa: over.mpesa ?? (cfg.DARAJA_DRIVER === 'fake'
       ? new FakeMpesa(deliverToOutbox(sql), cfg.NODE_ENV === 'test' ? 0 : 800)
       : new Daraja({
@@ -44,11 +46,29 @@ export function buildWorkerDeps(cfg: Config, over: Partial<WorkerDeps> = {}): Wo
       ? new ConsoleSms()
       : new AfricasTalkingSms({ username: cfg.AT_USERNAME!, apiKey: cfg.AT_API_KEY!, senderId: cfg.AT_SENDER_ID, sandbox: cfg.NODE_ENV !== 'production' })),
     push: over.push ?? (cfg.PUSH_DRIVER === 'expo' ? new ExpoPush({ accessToken: cfg.EXPO_ACCESS_TOKEN }) : new ConsolePush()),
+    alert: over.alert ?? makeAlerter(cfg),
     storage: over.storage ?? (cfg.STORAGE_DRIVER === 'local'
       ? new LocalStorage(cfg.STORAGE_LOCAL_DIR, cfg.API_PUBLIC_ORIGIN, cfg.COOKIE_SECRET)
       : new R2Storage({ accountId: cfg.R2_ACCOUNT_ID!, accessKeyId: cfg.R2_ACCESS_KEY_ID!,
           secretAccessKey: cfg.R2_SECRET_ACCESS_KEY!, bucket: cfg.R2_BUCKET! })),
   };
+}
+
+/**
+ * The card issuer for this environment. Fails closed: a driver without an adapter refuses to
+ * boot. It used to build the mock issuer whatever ISSUER_DRIVER said, so a production
+ * environment configured for a live issuer would have "loaded" cards that existed only in
+ * Redis, and recorded vendor payments that never happened.
+ */
+export function issuerFor(cfg: Config, redis: Redis): IssuerPort {
+  switch (cfg.ISSUER_DRIVER) {
+    case 'mock':
+      return new MockIssuer(redis, { autoSpend: cfg.NODE_ENV === 'development' });
+    case 'none':
+      return new NoCardIssuer();
+    default:
+      throw new Error(`ISSUER_DRIVER=${cfg.ISSUER_DRIVER} has no adapter in this build. Use ISSUER_DRIVER=none (till and cash rungs only) until the issuer integration ships.`);
+  }
 }
 
 const KNOWN = new Set(Object.keys(HANDLERS));
@@ -73,11 +93,24 @@ export async function drain(deps: WorkerDeps, opts: { ignoreDelay?: boolean; max
     for (const r of rows) if (!due.includes(r)) await deps.sql`UPDATE outbox_event SET claimed_at = NULL, attempts = attempts - 1 WHERE id = ${r.id}`;
     if (due.length === 0) return ran;
     for (const row of due) {
-      const outcome = await settleRow(deps.sql, row, KNOWN, (r) => runHandler(deps, r));
+      const outcome = await settleRow(deps.sql, row, KNOWN, (r) => runHandler(deps, r), parkAlert(deps));
       ran.push(`${row.queue}:${outcome}`);
     }
   }
   return ran;
+}
+
+/** A parked row is a dropped job — often someone's money — so it pages, with ids only. */
+function parkAlert(deps: WorkerDeps) {
+  return (row: OutboxRow, reason: string) => deps.alert({
+    severity: 'page',
+    title: `Outbox job parked: ${row.queue}`,
+    detail: reason,
+    data: {
+      outbox_id: row.id, queue: row.queue, attempts: row.attempts,
+      errand_id: typeof row.payload.errandId === 'string' ? row.payload.errandId : null,
+    },
+  });
 }
 
 /** Production: poller → BullMQ → workers. */
@@ -95,7 +128,7 @@ export function startQueues(deps: WorkerDeps, concurrency = 8) {
       removeOnComplete: 1000,
       removeOnFail: false,
     });
-  });
+  }, { ready: () => connection.status === 'ready', onPark: parkAlert(deps) });
 
   const worker = new Worker(QUEUE, async (job: Job<{ outboxId: string; payload: Record<string, unknown> }>) => {
     await runHandler(deps, { id: job.data.outboxId, queue: job.name, payload: job.data.payload, attempts: job.attemptsMade });
@@ -107,6 +140,8 @@ export function startQueues(deps: WorkerDeps, concurrency = 8) {
     if (!job || job.attemptsMade < (job.opts.attempts ?? 1)) return;
     deps.sql`UPDATE outbox_event SET parked_at = now(), last_error = ${String(err?.message ?? err).slice(0, 500)}
               WHERE id = ${job.data.outboxId}`.catch((e) => logger.error({ err: e }, 'could not park failed job'));
+    void parkAlert(deps)({ id: job.data.outboxId, queue: job.name, payload: job.data.payload, attempts: job.attemptsMade },
+      String(err?.message ?? err).slice(0, 200));
   });
 
   return async function stop() {

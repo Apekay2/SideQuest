@@ -8,6 +8,7 @@ import { logger } from '@sidequest/observability';
 import { buildWorkerDeps, startQueues } from './runtime.js';
 import { reconcile } from './jobs/reconcile.job.js';
 import { retention } from './jobs/retention.js';
+import { watchdog } from './jobs/safety.js';
 
 const cfg = config();
 assertMarketsConsistent();
@@ -28,11 +29,16 @@ const hourly = setInterval(() => {
   if (now.getUTCHours() === 0) {
     void once(`reconcile:${now.toISOString().slice(0, 10)}`, 86_400, () => reconcile({
       sql: deps.sql, issuer: deps.issuer,
-      page: async (f) => logger.fatal({ findings: f }, 'RECONCILIATION PAGE'),
-      ticket: async (f) => logger.error({ findings: f }, 'reconciliation ticket'),
+      // Findings carry counts and sample ids; the alert carries the check names and counts.
+      page: async (f) => deps.alert({ severity: 'page', title: `Reconciliation: ${f.length} check(s) failed`,
+        data: Object.fromEntries(f.map((x) => [x.check, x.count])) }),
+      ticket: async (f) => deps.alert({ severity: 'ticket', title: `Reconciliation: ${f.length} finding(s) to review`,
+        data: Object.fromEntries(f.map((x) => [x.check, x.count])) }),
     }));
   }
   void once(`retention:${now.toISOString().slice(0, 13)}`, 3600, () => retention(deps.sql, deps.storage));
+  // Every ten minutes: errands stuck in a live state go to Legal Operations (jobs/safety.ts).
+  void once(`watchdog:${now.toISOString().slice(0, 15)}`, 600, () => watchdog({ sql: deps.sql, alert: deps.alert }));
 }, 60_000);
 
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {

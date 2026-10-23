@@ -116,10 +116,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+      # No `cache: pnpm`: this job never installs, so the store directory does not exist and
+      # setup-node's post step failed the job trying to save it.
       - uses: actions/setup-node@v4
-        with: { node-version: '${{ env.NODE_VERSION }}', cache: pnpm }
-      # Critical blocks; high is reported and triaged.
-      - run: pnpm audit --prod --audit-level critical
+        with: { node-version: '${{ env.NODE_VERSION }}' }
+      # Critical blocks; high is reported and triaged. Each blocking advisory is written as an
+      # annotation (package, advisory, patched range) so the PR says what to upgrade.
+      - name: pnpm audit (critical blocks)
+        run: |
+          set -uo pipefail
+          pnpm audit --prod --json > /tmp/audit.json || true
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("/tmp/audit.json", "utf8") || "{}");
+            const adv = Object.values(r.advisories ?? {});
+            const crit = adv.filter((a) => a.severity === "critical");
+            for (const a of adv.filter((a) => a.severity === "high" || a.severity === "critical")) {
+              const paths = (a.findings ?? []).flatMap((f) => f.paths ?? []).slice(0, 3).join(" | ");
+              const level = a.severity === "critical" ? "error" : "warning";
+              console.log(`::${level} title=${a.severity}: ${a.module_name}::${a.github_advisory_id ?? a.id} ${a.title} — vulnerable ${a.vulnerable_versions}, patched ${a.patched_versions}. Paths: ${paths}`);
+            }
+            process.exit(crit.length > 0 ? 1 : 0);
+          '
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
@@ -147,13 +164,22 @@ jobs:
       # also proves infra/postgres builds.
       - name: postgres 16 + postgis + h3
         run: |
-          docker build -t sidequest/postgres infra/postgres
+          # The build's own output becomes an annotation on failure: annotations are readable
+          # from the PR (and the API), job logs are not always at hand.
+          if ! docker build --progress=plain -t sidequest/postgres infra/postgres > /tmp/pg-build.log 2>&1; then
+            tail -n 40 /tmp/pg-build.log
+            echo "::error title=postgres image build failed::$(tail -n 15 /tmp/pg-build.log | tr '\n' ' ' | cut -c1-3000)"
+            exit 1
+          fi
           docker run -d --name pg -p 5432:5432 -e POSTGRES_PASSWORD=ci sidequest/postgres
           # Wait on TCP, not the socket: during first-boot init the image runs a temporary
           # server on the Unix socket only, then restarts. A socket check passes against that
           # temporary server and the migration's TCP connection lands in the restart.
           for i in $(seq 1 90); do docker exec pg pg_isready -h 127.0.0.1 -U postgres -q && break; sleep 1; done
-          docker exec pg pg_isready -h 127.0.0.1 -U postgres
+          if ! docker exec pg pg_isready -h 127.0.0.1 -U postgres; then
+            echo "::error title=postgres did not start::$(docker logs pg 2>&1 | tail -n 15 | tr '\n' ' ' | cut -c1-3000)"
+            exit 1
+          fi
           docker exec pg psql -h 127.0.0.1 -U postgres -c 'CREATE DATABASE sq_shadow'
       - name: forward migrate
         run: pnpm migrate:up
@@ -174,7 +200,8 @@ jobs:
       # The API and worker in-process against real Postgres and Redis, connecting as the
       # application roles — never the owner, which would bypass every policy and pass anyway.
       - name: end-to-end (market run, security, flows)
-        run: pnpm --filter @sidequest/e2e test
+        # The github-actions reporter turns each failing test into an annotation on the PR.
+        run: pnpm --filter @sidequest/e2e exec vitest run --reporter=default --reporter=github-actions
         env:
           TEST_ADMIN_DATABASE_URL: postgres://postgres:ci@localhost:5432/sq_test
           APP_ROLE_PASSWORD: ci-role-pw
@@ -212,6 +239,22 @@ jobs:
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: sidequest/${{ matrix.name }}:${{ github.sha }}
-          severity: CRITICAL
-          exit-code: '1'
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
+          format: json
+          output: trivy-${{ matrix.name }}.json
+          exit-code: '0'
+      # Critical blocks, high is reported; each finding is an annotation naming the package, the
+      # installed and fixed versions, so the PR says exactly what to upgrade.
+      - name: image vulnerabilities (critical blocks)
+        run: |
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            let critical = 0;
+            for (const res of r.Results ?? []) for (const v of res.Vulnerabilities ?? []) {
+              if (v.Severity === "CRITICAL") critical++;
+              const level = v.Severity === "CRITICAL" ? "error" : "warning";
+              console.log(`::${level} title=${v.Severity}: ${v.PkgName} (${res.Target})::${v.VulnerabilityID} installed ${v.InstalledVersion}, fixed in ${v.FixedVersion}. ${(v.Title ?? "").slice(0, 120)}`);
+            }
+            process.exit(critical > 0 ? 1 : 0);
+          ' trivy-${{ matrix.name }}.json

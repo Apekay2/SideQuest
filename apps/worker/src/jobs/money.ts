@@ -88,8 +88,11 @@ export async function voidAndReturn(ctx: JobContext, errandId: string): Promise<
   const [c] = await sql<{ id: string; issuer_ref: string; voided_at: Date | null }[]>`
     SELECT id, issuer_ref, voided_at FROM card WHERE errand_id = ${errandId}`;
   if (!c || c.voided_at) return;
-  const left = Number(await issuer.getBalance(c.issuer_ref));
-  await issuer.voidCard({ issuerRef: c.issuer_ref, idemKey: `void:${errandId}` });
+  // What the close swept off the card, as the issuer reports it. It used to be a balance read
+  // BEFORE the void: a tap at the till in between was then returned to escrow as "unspent"
+  // although the vendor had been paid with it.
+  const { sweptCents } = await issuer.voidCard({ issuerRef: c.issuer_ref, idemKey: `void:${errandId}` });
+  const left = Number(sweptCents);
   await sql.begin(async (tx) => {
     const e = await errandFor(tx, errandId);
     if (!e) return;
@@ -199,7 +202,8 @@ export const errandExpire: Handler = async (payload, ctx) => {
       SELECT (auction_closes_at + make_interval(mins => ${EXPIRE_GRACE_MINUTES}) <= now()) AS due FROM errand WHERE id = ${errandId}`;
     if (!due?.due) return null;
     const from = e.status === 'offered' ? nextStatus('offered', 'offer_lapsed', 'system') : e.status;
-    await tx`UPDATE errand SET status = ${nextStatus(from, 'auction_expired', 'system')}, offered_to = NULL, updated_at = now()
+    await tx`UPDATE errand SET status = ${nextStatus(from, 'auction_expired', 'system')}, offered_to = NULL,
+                              agreed_fee_cents = NULL, updated_at = now()
               WHERE id = ${errandId}`;
     await tx`UPDATE errand_offer SET outcome = 'lapsed', resolved_at = now() WHERE errand_id = ${errandId} AND outcome = 'pending'`;
     await tx`UPDATE bid SET status = 'lost' WHERE errand_id = ${errandId} AND status = 'sealed'`;

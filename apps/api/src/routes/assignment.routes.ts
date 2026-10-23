@@ -65,7 +65,10 @@ export default async function assignmentRoutes(app: FastifyInstance) {
            SET runner_id = ${runnerId},
                status = 'awarded',
                assigned_at = now(),
-               agreed_fee_cents = COALESCE(agreed_fee_cents, max_fee_cents),
+               -- An offer's fee binds only the runner it was offered to. Claiming an open
+               -- errand pays the ceiling every runner saw in the feed — never a fee left behind
+               -- by an offer that was declined or lapsed (it used to be COALESCEd in).
+               agreed_fee_cents = CASE WHEN status = 'offered' THEN agreed_fee_cents ELSE max_fee_cents END,
                offered_to = NULL,
                offer_expires_at = NULL,
                updated_at = now()
@@ -119,7 +122,8 @@ export default async function assignmentRoutes(app: FastifyInstance) {
       }
 
       const [e] = await tx<{ requester_id: string }[]>`
-        UPDATE errand SET status = 'open', offered_to = NULL, offer_expires_at = NULL, updated_at = now()
+        UPDATE errand SET status = 'open', offered_to = NULL, offer_expires_at = NULL,
+                          agreed_fee_cents = NULL, updated_at = now()
          WHERE id = ${id} AND runner_id IS NULL AND offered_to = ${runnerId}
         RETURNING requester_id`;
       // Addressed, not broadcast. `accountId: null` fanned this notification out to whatever
@@ -179,7 +183,7 @@ export default async function assignmentRoutes(app: FastifyInstance) {
       }).depositCents;
       if ((e.funded_cents ?? 0) < need) throw new AppError(409, 'NOT_FUNDED', 'Fund the escrow first');
 
-      return tx<{ runner_id: string; display_name: string; band: string; cell_r9: string;
+      return tx<{ runner_id: string; display_name: string; band: string; cell_r8: string;
                   completed: number; recorded_at: Date }[]>`
         WITH origin AS (
           SELECT ST_SetSRID(ST_MakePoint(${e.lng}, ${e.lat}), 4326)::geography AS g,
@@ -193,7 +197,10 @@ export default async function assignmentRoutes(app: FastifyInstance) {
                     WHEN ST_Distance(rl.point, o.g) < 1500 THEN 'under_1_5km'
                     WHEN ST_Distance(rl.point, o.g) < 3000 THEN 'under_3km'
                     ELSE 'over_3km' END AS band,
-               rl.cell_r9::text AS cell_r9,
+               -- Res-8 (~0.7 km²), not res-9 (~0.1 km²): this endpoint can be polled 30
+               -- times an hour by any requester holding a funded errand, and a res-9 cell
+               -- every two minutes is enough to follow one runner home.
+               h3_cell_to_parent(rl.cell_r9, 8)::text AS cell_r8,
                COALESCE(r.completed, 0) AS completed,
                rl.recorded_at
           FROM runner_location rl
@@ -225,7 +232,7 @@ export default async function assignmentRoutes(app: FastifyInstance) {
         runner_id: r.runner_id,
         display_name: r.display_name,
         distance_band: r.band,        // no metres until the runner accepts and the link is live
-        cell_r9: r.cell_r9,           // the map clusters on this, not on pixel distance
+        cell_r8: r.cell_r8,           // the map clusters on this, not on pixel distance
         completed_with_you: r.completed,
         fix_age_seconds: Math.round((Date.now() - r.recorded_at.getTime()) / 1000),
       })),

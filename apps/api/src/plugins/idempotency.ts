@@ -15,6 +15,15 @@ import { AppError } from './errors.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * A claimed key whose request never recorded an outcome — the process died mid-request — is
+ * "in flight" for ever, and a client retrying it would be told to wait for ever. After this
+ * long it is reported as abandoned instead: the client stops retrying that key, checks the
+ * state of what it was doing, and starts a new intent with a new key. It is not re-run
+ * silently, because the earlier attempt may have committed (a top-up, a payout) before dying.
+ */
+export const IN_FLIGHT_LEASE_MS = 2 * 60_000;
+
 export default fp(async function idempotency(app: FastifyInstance) {
   const { sql } = app.deps;
 
@@ -55,6 +64,10 @@ export default fp(async function idempotency(app: FastifyInstance) {
       throw new AppError(409, 'IDEMPOTENCY_CONFLICT', 'This Idempotency-Key was used for a different request');
     }
     if (prior.status_code === null) {
+      if (Date.now() - prior.created_at.getTime() > IN_FLIGHT_LEASE_MS) {
+        throw new AppError(409, 'IDEMPOTENCY_ABANDONED',
+          'We could not confirm whether that request went through. Check before trying again.');
+      }
       throw new AppError(409, 'IDEMPOTENCY_IN_FLIGHT', 'The original request is still being processed');
     }
     req.idempotency = { key, hash, replayed: true };

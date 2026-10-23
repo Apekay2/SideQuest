@@ -434,20 +434,28 @@ export default async function errandRoutes(app: FastifyInstance) {
 
   // ─────────────────────────────────────────── runner feed
 
-  app.get('/feed', { preHandler: [app.requireEntitlement('bid.place')] }, async (req) => {
+  app.get('/feed', { preHandler: [app.requireEntitlement('bid.place'), app.limit(LIMITS.feed)] }, async (req) => {
     const q = parse(FeedQuery, req.query);
+    // An errand with no pickup is located by its dropoff, which is the requester's door. The
+    // feed filtered and banded on that exact point, so a runner could move the query point and
+    // the radius (any metre from 200 to 10,000) and binary-search a home address in a few dozen
+    // reads. The door now stands in as the centre of its res-8 H3 cell (~0.7 km²) — the same
+    // coarseness the errand detail already shows non-parties. Pickups are shops and markets;
+    // they stay exact.
     const rows = await app.tx(req, (tx) => tx<(FeedItem & { metres: number })[]>`
-      WITH here AS (SELECT ST_SetSRID(ST_MakePoint(${q.lng}, ${q.lat}), 4326)::geography AS g)
+      WITH here AS (SELECT ST_SetSRID(ST_MakePoint(${q.lng}, ${q.lat}), 4326)::geography AS g),
+           located AS (
+             SELECT e.*, COALESCE(e.pickup, h3_cell_to_geometry(h3_cell_to_parent(e.dropoff_cell, 8))::geography) AS at_point
+               FROM errand e
+              WHERE e.status = 'open' AND e.requester_id <> ${req.actor!.id})
       SELECT e.id, e.kind, e.title, e.spend_cap_cents, e.max_fee_cents, e.bonus_cents, e.deadline_at,
              e.auction_closes_at,
-             ST_Distance(COALESCE(e.pickup, e.dropoff), h.g) AS metres,
+             ST_Distance(e.at_point, h.g) AS metres,
              (SELECT count(*)::int FROM stall s WHERE s.errand_id = e.id) AS stall_count,
              (SELECT b.fee_cents FROM bid b WHERE b.errand_id = e.id AND b.runner_id = ${req.actor!.id}
                 AND b.status = 'sealed') AS my_bid_cents
-        FROM errand e CROSS JOIN here h
-       WHERE e.status = 'open'
-         AND e.requester_id <> ${req.actor!.id}
-         AND ST_DWithin(COALESCE(e.pickup, e.dropoff), h.g, ${q.radius_m})
+        FROM located e CROSS JOIN here h
+       WHERE ST_DWithin(e.at_point, h.g, ${q.radius_m})
        ORDER BY e.bonus_cents DESC, metres
        LIMIT 50`);
     return {

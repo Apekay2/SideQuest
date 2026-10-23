@@ -32,6 +32,9 @@ export const LIMITS = {
   writes:          { name: 'write',            max: 60,  windowSeconds: 60,   by: 'account',        onRedisDown: 'allow' },
   reads:           { name: 'read',             max: 300, windowSeconds: 60,   by: 'account',        onRedisDown: 'allow' },
   nearby:          { name: 'runners.nearby',   max: 30,  windowSeconds: 3600, by: 'account',        onRedisDown: 'deny'  },
+  // The feed is a runner's main screen (polled while open), but it is also a location oracle
+  // over open errands; 120 an hour is a refresh every 30 s, and caps systematic probing.
+  feed:            { name: 'errands.feed',     max: 120, windowSeconds: 3600, by: 'account',        onRedisDown: 'allow' },
   locationIngest:  { name: 'location.ingest',  max: 30,  windowSeconds: 60,   by: 'account',        onRedisDown: 'allow' },
   offer:           { name: 'errand.offer',     max: 20,  windowSeconds: 3600, by: 'account',        onRedisDown: 'deny'  },
   accept:          { name: 'errand.accept',    max: 60,  windowSeconds: 60,   by: 'account',        onRedisDown: 'deny'  },

@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseCallback, ipInCidrs, FakeMpesa } from './mpesa/index.js';
+import { parseCallback, ipInCidrs, FakeMpesa, Daraja } from './mpesa/index.js';
+import { MockIssuer, NoCardIssuer } from './issuer/index.js';
+import { MpesaRejectedError, MpesaUnknownOutcomeError, isDefinitiveRejection } from '@sidequest/domain/rails/mpesa.port';
+import { afterEach, vi } from 'vitest';
 import { LocalStorage } from './storage/index.js';
 import { cents } from '@sidequest/domain/money/money';
 
@@ -12,7 +15,17 @@ describe('daraja callbacks', () => {
       CheckoutRequestID: 'ws_CO_1', ResultCode: 0, ResultDesc: 'ok',
       CallbackMetadata: { Item: [{ Name: 'Amount', Value: 1500 }, { Name: 'MpesaReceiptNumber', Value: 'QK12' }] },
     } } });
-    expect(r).toEqual({ kind: 'stk', ref: 'ws_CO_1', ok: true, resultCode: '0', resultDesc: 'ok', amountCents: 150000, receipt: 'QK12' });
+    expect(r).toEqual({ kind: 'stk', ref: 'ws_CO_1', ok: true, resultCode: '0', resultDesc: 'ok', amountCents: 150000, receipt: 'QK12', msisdn: null });
+  });
+
+  it('carries the payer on an STK result and the originator on a till or B2C result', () => {
+    const stk = parseCallback('stk', { Body: { stkCallback: {
+      CheckoutRequestID: 'ws_CO_2', ResultCode: 0,
+      CallbackMetadata: { Item: [{ Name: 'Amount', Value: 10 }, { Name: 'PhoneNumber', Value: 254722000111 }] },
+    } } });
+    expect(stk?.msisdn).toBe('254722000111');
+    const b2c = parseCallback('result', { Result: { ConversationID: 'AG_3', OriginatorConversationID: 'b2c:payout:abc', ResultCode: 0 } });
+    expect(b2c?.originator).toBe('b2c:payout:abc');
   });
 
   it('tells a till result from a payout by the originator prefix', () => {
@@ -97,5 +110,96 @@ describe('push', async () => {
     const fetcher = (async () => new Response('busy', { status: 429 })) as unknown as typeof fetch;
     const out = await new ExpoPush({ fetcher }).send([{ to: 'ExponentPushToken[xxxxxxxxxxxx]', title: 't', body: 'b' }]);
     expect(out).toEqual([{ ok: false, error: 'push service 429', deviceGone: false }]);
+  });
+});
+
+
+// ─────────────────────────────────────────────── production readiness audit
+
+describe('Daraja failures are classified, so a timeout is never treated as a refusal', () => {
+  const daraja = () => new Daraja({
+    env: 'sandbox', consumerKey: 'ck', consumerSecret: 'cs', shortcode: '600000', passkey: 'pk',
+    initiator: 'init', securityCredential: 'cred', callbackBase: 'https://api.example.test', callbackToken: 'tok',
+  });
+  const token = () => new Response(JSON.stringify({ access_token: 't', expires_in: '3599' }), { status: 200 });
+  const b2c = (d: Daraja) => d.b2c({ msisdn: '+254722000111', amountCents: cents(10_000), remarks: 'x', idemKey: 'k' });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('a timeout is an unknown outcome', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(token())
+      .mockRejectedValueOnce(Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' })));
+    const err = await b2c(daraja()).catch((e) => e);
+    expect(err).toBeInstanceOf(MpesaUnknownOutcomeError);
+    expect(isDefinitiveRejection(err)).toBe(false);
+  });
+
+  it('a 5xx or an unreadable body is an unknown outcome', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(token())
+      .mockResolvedValueOnce(new Response('<html>bad gateway</html>', { status: 502 })));
+    expect(await b2c(daraja()).catch((e) => e)).toBeInstanceOf(MpesaUnknownOutcomeError);
+  });
+
+  it('a 4xx or a non-zero ResponseCode is a rejection', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(token())
+      .mockResolvedValueOnce(new Response(JSON.stringify({ errorCode: '400.002.02', errorMessage: 'Bad Request' }), { status: 400 })));
+    const err = await b2c(daraja()).catch((e) => e);
+    expect(err).toBeInstanceOf(MpesaRejectedError);
+    expect(isDefinitiveRejection(err)).toBe(true);
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(token())
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ResponseCode: '1', ResponseDescription: 'no' }), { status: 200 })));
+    expect(await b2c(daraja()).catch((e) => e)).toBeInstanceOf(MpesaRejectedError);
+  });
+
+  it('a failed token request is a rejection: nothing was sent', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(new Response('', { status: 401 })));
+    expect(await b2c(daraja()).catch((e) => e)).toBeInstanceOf(MpesaRejectedError);
+  });
+
+  it('an unrecognised error is never treated as a rejection', () => {
+    expect(isDefinitiveRejection(new Error('socket hang up'))).toBe(false);
+  });
+});
+
+describe('card issuers', () => {
+  it('the no-card issuer declines every load terminally, so the ladder moves to the till', async () => {
+    const i = new NoCardIssuer();
+    const c = await i.createCard({ errandId: 'e1', ceilingCents: cents(1000), holderName: 'x', idemKey: 'card:e1' });
+    expect(c.issuerRef).toBe('nocard:e1');
+    expect(await i.loadCard()).toMatchObject({ ok: false, retryable: false, code: 'card_unavailable' });
+    expect(await i.voidCard()).toEqual({ sweptCents: 0 });
+  });
+
+  it('the mock issuer sweeps on void, atomically and idempotently', async () => {
+    // A tiny in-memory stand-in for the three Redis commands the mock uses.
+    const kv = new Map<string, string>();
+    const hashes = new Map<string, Record<string, string>>();
+    const redis = {
+      get: async (k: string) => kv.get(k) ?? null,
+      set: async (k: string, v: string, nx?: string) => { if (nx === 'NX' && kv.has(k)) return null; kv.set(k, v); return 'OK'; },
+      hset: async (k: string, v: Record<string, string>) => { hashes.set(k, { ...(hashes.get(k) ?? {}), ...v }); return 1; },
+      hgetall: async (k: string) => hashes.get(k) ?? {},
+      hget: async (k: string, f: string) => hashes.get(k)?.[f] ?? null,
+      hincrby: async (k: string, f: string, by: number) => { const h = hashes.get(k)!; h[f] = String(Number(h[f] ?? 0) + by); return Number(h[f]); },
+      eval: async (_script: string, _n: number, cardKey: string, voidKey: string) => {
+        if (kv.has(voidKey)) return Number(kv.get(voidKey));
+        const bal = Number(hashes.get(cardKey)?.balance ?? 0);
+        hashes.set(cardKey, { ...(hashes.get(cardKey) ?? {}), voided: '1', balance: '0' });
+        kv.set(voidKey, String(bal));
+        return bal;
+      },
+    };
+    const i = new MockIssuer(redis as never);
+    const c = await i.createCard({ errandId: 'e2', ceilingCents: cents(10_000), holderName: 'x', idemKey: 'card:e2' });
+    expect(await i.loadCard({ issuerRef: c.issuerRef, amountCents: cents(10_000), idemKey: 'l1' })).toMatchObject({ ok: true });
+    await i.simulateSpend(c.issuerRef, 3_000);
+    expect(await i.voidCard({ issuerRef: c.issuerRef, idemKey: 'void:e2' })).toEqual({ sweptCents: 7_000 });
+    // A retried void answers the same amount, so a crash between void and commit loses nothing.
+    expect(await i.voidCard({ issuerRef: c.issuerRef, idemKey: 'void:e2' })).toEqual({ sweptCents: 7_000 });
+    // And nothing can be spent on a closed card.
+    await expect(i.simulateSpend(c.issuerRef, 1)).rejects.toThrow();
   });
 });

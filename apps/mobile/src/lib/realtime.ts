@@ -9,7 +9,12 @@ import { useSession } from './session';
 
 // Server close codes (apps/api/src/realtime/ws.ts): the socket is bound to the session.
 const EXPIRED = 4402;
-const AUTH_CLOSES = new Set([4401, 4402, 4403]);
+// 4409: the server closed this socket because the account opened too many; reconnecting would
+// only push another of its own sockets out. Polling covers this device until the next sign-in.
+const AUTH_CLOSES = new Set([4401, 4402, 4403, 4409]);
+
+/** Full jitter: after a server restart, every phone must not reconnect in the same second. */
+const jittered = (ms: number) => Math.round(ms / 2 + Math.random() * (ms / 2));
 
 type Listener = (event: string, data: Record<string, unknown>) => void;
 const listeners = new Set<Listener>();
@@ -54,7 +59,7 @@ export function startRealtime(qc: QueryClient): () => void {
         if (e.code === EXPIRED) void refresh();
         return;
       }
-      setTimeout(connect, backoff);
+      setTimeout(connect, jittered(backoff));
       backoff = Math.min(backoff * 2, 30_000);
     };
     ws.onerror = () => ws?.close();

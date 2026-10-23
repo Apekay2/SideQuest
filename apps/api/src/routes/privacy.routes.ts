@@ -10,7 +10,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { DeleteAccount, LocationConsentBody, type LocationConsent } from '@sidequest/contracts';
-import { ledgerBalance, type Tx } from '@sidequest/db';
+import { ledgerBalance, enqueueOutbox, type Tx } from '@sidequest/db';
 import { logger } from '@sidequest/observability';
 import { AppError } from '../plugins/errors.js';
 import { LIMITS } from '../plugins/rate-limit.js';
@@ -82,14 +82,21 @@ export default async function privacyRoutes(app: FastifyInstance) {
         throw e;
       }
     });
-    // The rows are gone; now the documents. A failure here is logged with the key count only,
-    // and the retention pass would not find these keys again, so it is retried in place.
-    let failed = 0;
+    // The rows are gone; now the documents. Nothing will ever find these keys again, so a
+    // delete that fails is handed to the worker's durable retry ('storage.delete', which
+    // retries and then parks for a person) — it used to be logged and forgotten, leaving the
+    // person's ID photos in the bucket after they had been told their account was erased.
+    const failed: string[] = [];
     for (const key of keys) {
-      try { await storage.delete(key); }
-      catch { try { await storage.delete(key); } catch { failed++; } }
+      try { await storage.delete(key); } catch { failed.push(key); }
     }
-    if (failed) logger.error({ account: me, failed }, 'erasure: stored documents not deleted');
+    if (failed.length) {
+      logger.error({ account: me, failed: failed.length }, 'erasure: stored documents deferred to the worker');
+      for (let i = 0; i < failed.length; i += 50) {
+        await app.tx(req, (tx) => enqueueOutbox(tx, 'storage.delete',
+          { keys: failed.slice(i, i + 50), reason: 'erasure' }, { delaySeconds: 30 }));
+      }
+    }
     return reply.code(204).send();
   });
 

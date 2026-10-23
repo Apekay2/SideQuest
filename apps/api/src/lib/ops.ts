@@ -3,7 +3,7 @@
 // in-transaction audit row, and entitlement checks for parts of a response.
 
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { Tx } from '@sidequest/db';
+import { withActor, type Tx } from '@sidequest/db';
 import { ipInCidrs } from '@sidequest/adapters';
 import { AppError } from '../plugins/errors.js';
 
@@ -17,6 +17,17 @@ export function opsGate(app: FastifyInstance) {
     },
     app.requireRole('staff'),
     app.requireEntitlement(ent),
+    // The token's grants are up to 15 minutes old. For the accounts that can rule disputes,
+    // void cards and approve identities, that was 15 minutes in which a suspended officer, or
+    // one whose grant had just been removed, could keep acting. Every /ops request now re-reads
+    // the session and the account: one indexed lookup each.
+    app.assertSessionIntegrity,
+    async (req: FastifyRequest) => {
+      const [a] = await withActor(app.deps.sql, req.actor!, (tx) => tx<{ role: string; suspended_at: Date | null; staff_grants: string[] }[]>`
+        SELECT role, suspended_at, staff_grants FROM account WHERE id = ${req.actor!.id}`);
+      if (!a || a.role !== 'staff' || a.suspended_at) throw new AppError(401, 'SESSION_REVOKED', 'Sign in again');
+      if (!a.staff_grants.includes(ent)) throw new AppError(403, 'FORBIDDEN', 'This access was removed. Sign in again to refresh it.');
+    },
   ];
 }
 

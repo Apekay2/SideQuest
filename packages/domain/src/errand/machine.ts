@@ -57,12 +57,15 @@ const TRANSITIONS: readonly Transition[] = [
   { from: 'shopping',          event: 'ready_for_handover', to: 'handover',          by: ['runner'] },
   { from: 'handover',          event: 'handover_scanned',   to: 'settled',           by: ['runner'] },
 
-  // Disputes. Filing freezes escrow; only Legal Operations resolves.
-  { from: 'awarded',           event: 'raise_dispute',      to: 'disputed',          by: ['requester', 'runner'] },
-  { from: 'en_route',          event: 'raise_dispute',      to: 'disputed',          by: ['requester', 'runner'] },
-  { from: 'shopping',          event: 'raise_dispute',      to: 'disputed',          by: ['requester', 'runner'] },
-  { from: 'awaiting_approval', event: 'raise_dispute',      to: 'disputed',          by: ['requester', 'runner'] },
-  { from: 'handover',          event: 'raise_dispute',      to: 'disputed',          by: ['requester', 'runner'] },
+  // Disputes. Filing freezes escrow; only Legal Operations resolves. `system` is the stuck-errand
+  // watchdog: an errand nobody can finish is handed to a person rather than holding money forever.
+  // A settled errand can be disputed by a party only (within DISPUTE_WINDOW_HOURS, enforced by
+  // the API), never by the system.
+  { from: 'awarded',           event: 'raise_dispute',      to: 'disputed',          by: ['requester', 'runner', 'system'] },
+  { from: 'en_route',          event: 'raise_dispute',      to: 'disputed',          by: ['requester', 'runner', 'system'] },
+  { from: 'shopping',          event: 'raise_dispute',      to: 'disputed',          by: ['requester', 'runner', 'system'] },
+  { from: 'awaiting_approval', event: 'raise_dispute',      to: 'disputed',          by: ['requester', 'runner', 'system'] },
+  { from: 'handover',          event: 'raise_dispute',      to: 'disputed',          by: ['requester', 'runner', 'system'] },
   { from: 'settled',           event: 'raise_dispute',      to: 'disputed',          by: ['requester', 'runner'] },
   { from: 'disputed',          event: 'resolve_dispute',    to: 'settled',           by: ['legal_ops'] },
 
@@ -82,6 +85,19 @@ export const CARD_ACTIVE: readonly ErrandStatus[] = [
 export const LIVE: readonly ErrandStatus[] = [
   'awarded', 'en_route', 'shopping', 'awaiting_approval', 'handover',
 ];
+
+/**
+ * How long an errand may sit in a live state before the watchdog hands it to Legal Operations
+ * (worker jobs/watchdog.ts). Generous on purpose: a market run can take an afternoon, and a
+ * false alarm costs an officer's time, while a missed one holds someone's money indefinitely.
+ */
+export const STUCK_AFTER_HOURS: Readonly<Partial<Record<ErrandStatus, number>>> = {
+  awarded: 12,
+  en_route: 12,
+  shopping: 12,
+  awaiting_approval: 12,
+  handover: 24,
+};
 
 export class IllegalTransitionError extends Error {
   readonly code = 'ERRAND_STATE_INVALID';

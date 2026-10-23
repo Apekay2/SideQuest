@@ -10,8 +10,12 @@ const REFRESH_AHEAD_SECONDS = 60;
 
 function csp(nonce: string): string {
   const dev = process.env.NODE_ENV === 'development';
-  // Evidence and KYC photos load straight from presigned storage URLs.
-  const images = [apiUrl(), process.env.STORAGE_PUBLIC_ORIGIN].filter(Boolean).map((u) => new URL(u!).origin).join(' ');
+  // Evidence and KYC photos load straight from presigned storage URLs. A malformed origin in
+  // the environment is dropped, not thrown: this runs before every page, and a throw here was
+  // a 500 on every route of the console.
+  const images = [apiUrl(), process.env.STORAGE_PUBLIC_ORIGIN].filter(Boolean)
+    .map((u) => { try { return new URL(u!).origin; } catch { return null; } })
+    .filter(Boolean).join(' ');
   return [
     `default-src 'self'`,
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? ` 'unsafe-eval'` : ''}`,
@@ -49,6 +53,18 @@ export async function proxy(request: NextRequest) {
   const now = Math.floor(Date.now() / 1000);
 
   if (onSignIn) {
+    // Sent here because the API refused the session (revoked, suspended, grant removed): the
+    // access cookie may still LOOK valid. Bouncing back to '/' on its claims was a redirect
+    // loop — the page 401s, redirects here, this redirects there — until the token expired.
+    // Clear both cookies and show the form.
+    // Only on the page load: the sign-in form's own server-action POSTs to this URL must not
+    // have the cookies they are about to set deleted underneath them.
+    if (request.method === 'GET' && request.nextUrl.searchParams.has('expired')) {
+      const res = NextResponse.next({ request: { headers } });
+      res.cookies.delete(ACCESS);
+      res.cookies.delete(REFRESH);
+      return finish(res);
+    }
     if (claims && claims.role === 'staff' && claims.exp > now) return finish(NextResponse.redirect(new URL('/', request.url)));
     return finish(NextResponse.next({ request: { headers } }));
   }
