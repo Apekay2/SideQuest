@@ -118,8 +118,23 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}', cache: pnpm }
-      # Critical blocks; high is reported and triaged.
-      - run: pnpm audit --prod --audit-level critical
+      # Critical blocks; high is reported and triaged. Each blocking advisory is written as an
+      # annotation (package, advisory, patched range) so the PR says what to upgrade.
+      - name: pnpm audit (critical blocks)
+        run: |
+          set -uo pipefail
+          pnpm audit --prod --json > /tmp/audit.json || true
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync("/tmp/audit.json", "utf8") || "{}");
+            const adv = Object.values(r.advisories ?? {});
+            const crit = adv.filter((a) => a.severity === "critical");
+            for (const a of adv.filter((a) => a.severity === "high" || a.severity === "critical")) {
+              const paths = (a.findings ?? []).flatMap((f) => f.paths ?? []).slice(0, 3).join(" | ");
+              const level = a.severity === "critical" ? "error" : "warning";
+              console.log(`::${level} title=${a.severity}: ${a.module_name}::${a.github_advisory_id ?? a.id} ${a.title} — vulnerable ${a.vulnerable_versions}, patched ${a.patched_versions}. Paths: ${paths}`);
+            }
+            process.exit(crit.length > 0 ? 1 : 0);
+          '
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
@@ -183,7 +198,8 @@ jobs:
       # The API and worker in-process against real Postgres and Redis, connecting as the
       # application roles — never the owner, which would bypass every policy and pass anyway.
       - name: end-to-end (market run, security, flows)
-        run: pnpm --filter @sidequest/e2e test
+        # The github-actions reporter turns each failing test into an annotation on the PR.
+        run: pnpm --filter @sidequest/e2e exec vitest run --reporter=default --reporter=github-actions
         env:
           TEST_ADMIN_DATABASE_URL: postgres://postgres:ci@localhost:5432/sq_test
           APP_ROLE_PASSWORD: ci-role-pw
