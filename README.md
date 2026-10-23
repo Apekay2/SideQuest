@@ -166,7 +166,7 @@ Checked and found sound:
 
 ### Production-readiness audit (23 October 2026)
 
-A second pass fixed 30 findings, from two critical RCEs in the console's Next.js and a worker
+A second pass fixed 31 findings, from two critical RCEs in the console's Next.js and a worker
 that silently used the mock card issuer, to payouts reversed on a timeout (paying twice),
 unbounded retry loops, an SOS that paged nobody, and errands that could hold escrow for ever.
 It also took the decisions those gaps forced. Read, in order:
