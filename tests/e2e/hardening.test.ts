@@ -183,7 +183,7 @@ describe('ISSUER_DRIVER=none: the ladder starts at the vendor till', () => {
     const t = (await req.client.get(`/errands/${e.id}/tranches`)).body.items[0];
     expect(t.status).toBe('loaded');
     expect(t.attempts.map((a: any) => `${a.rung}:${a.result}`)).toEqual(['card:declined', 'mpesa_till:success']);
-    const [card] = await w.admin`SELECT loaded_cents, issuer_ref FROM card WHERE errand_id = ${e.id}`;
+    const [card] = await w.admin`SELECT loaded_cents::int AS loaded_cents, issuer_ref FROM card WHERE errand_id = ${e.id}`;
     expect(card).toMatchObject({ loaded_cents: 0, issuer_ref: `nocard:${e.id}` });
   });
 });

@@ -10,7 +10,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { DeleteAccount, LocationConsentBody, type LocationConsent } from '@sidequest/contracts';
-import { ledgerBalance, enqueueOutbox, withActor, type Tx } from '@sidequest/db';
+import { ledgerBalance, enqueueOutbox, type Tx } from '@sidequest/db';
 import { logger } from '@sidequest/observability';
 import { AppError } from '../plugins/errors.js';
 import { LIMITS } from '../plugins/rate-limit.js';
@@ -93,7 +93,7 @@ export default async function privacyRoutes(app: FastifyInstance) {
     if (failed.length) {
       logger.error({ account: me, failed: failed.length }, 'erasure: stored documents deferred to the worker');
       for (let i = 0; i < failed.length; i += 50) {
-        await withActor(app.deps.sql, null, (tx) => enqueueOutbox(tx, 'storage.delete',
+        await app.tx(req, (tx) => enqueueOutbox(tx, 'storage.delete',
           { keys: failed.slice(i, i + 50), reason: 'erasure' }, { delaySeconds: 30 }));
       }
     }

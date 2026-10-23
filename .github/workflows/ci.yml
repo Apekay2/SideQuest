@@ -116,8 +116,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+      # No `cache: pnpm`: this job never installs, so the store directory does not exist and
+      # setup-node's post step failed the job trying to save it.
       - uses: actions/setup-node@v4
-        with: { node-version: '${{ env.NODE_VERSION }}', cache: pnpm }
+        with: { node-version: '${{ env.NODE_VERSION }}' }
       # Critical blocks; high is reported and triaged. Each blocking advisory is written as an
       # annotation (package, advisory, patched range) so the PR says what to upgrade.
       - name: pnpm audit (critical blocks)
