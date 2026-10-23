@@ -10,11 +10,30 @@ import { insertPostingGroup } from '@sidequest/db';
 import { nextStep, type Attempt } from '@sidequest/domain/card/decline-ladder';
 import { captureSpend, reverseTranche, reimbursementDue } from '@sidequest/domain/ledger/posting';
 import { cents } from '@sidequest/domain/money/money';
-import { MpesaAmountError } from '@sidequest/domain/rails/mpesa.port';
+import { MpesaAmountError, isDefinitiveRejection } from '@sidequest/domain/rails/mpesa.port';
+import { metrics } from '@sidequest/observability';
 import { type Handler, type JobContext, publish, later, syncEscrowMirror, str } from '../context.js';
 import { maybeAdvanceToHandover } from './shared.js';
 
 const CONFIRMATION_WINDOW_MS = 5 * 60 * 1000;
+/**
+ * How long a till payment may wait for its Daraja result before a human is asked. Results
+ * normally arrive in seconds; one that never does used to leave the tranche `pending` — and
+ * the runner standing at the stall — forever, because the ladder reads a pending attempt as
+ * "wait".
+ */
+export const TILL_RESULT_TIMEOUT_MS = 10 * 60 * 1000;
+/**
+ * How long an issuer may answer `unknown` for an interrupted load before a human is asked.
+ * The replay used to re-enqueue itself every 5 seconds with no end: 17,000 outbox rows a day
+ * per stuck tranche, and no page.
+ */
+export const ISSUER_UNKNOWN_GIVE_UP_MS = 30 * 60 * 1000;
+
+/** Re-ask after a delay that grows with the attempt's age: 5 s at first, never over 5 min. */
+export function unknownRetryDelaySeconds(ageMs: number): number {
+  return Math.min(300, Math.max(5, Math.round(ageMs / 6000)));
+}
 
 interface TrancheCtx {
   id: string; card_id: string; stall_id: string; seq: number; amount_cents: number; status: string;
@@ -89,6 +108,16 @@ export const cardLoad: Handler = async (payload, ctx) => {
   const attempts: Attempt[] = rows.map((a) => ({ rung: a.rung, result: a.result, code: a.provider_code }));
   const requestedAt = rows.find((a) => a.rung === 'reimbursement')?.created_at;
 
+  // A till payment whose result never came. Moving on to the next rung could pay this stall
+  // twice (the till payment may yet complete), so it stops here and fails loudly: the job is
+  // retried and then parked, which is what puts it in front of a person.
+  const tillWaiting = rows.find((a) => a.rung === 'mpesa_till' && a.result === 'pending');
+  if (tillWaiting && Date.now() - tillWaiting.created_at.getTime() > TILL_RESULT_TIMEOUT_MS) {
+    metrics.increment('card.till_result_missing');
+    log.error({ attempt: tillWaiting.id }, 'till payment has no result; needs a human');
+    throw new Error(`till payment ${tillWaiting.id} for tranche ${trancheId} has had no Daraja result for over ${TILL_RESULT_TIMEOUT_MS / 60_000} minutes`);
+  }
+
   // The reimbursement attempt row is written `pending` while we wait for the requester. The
   // ladder reads a pending attempt as "wait", so an answered request is resolved to `error`
   // first — the answer itself travels in reimbursement_confirmed.
@@ -134,9 +163,16 @@ export const cardLoad: Handler = async (payload, ctx) => {
         log.warn('replaying an interrupted issuer call; reconciling by idempotency key');
         const prior = await issuer.getLoad({ issuerRef: t.issuer_ref, idemKey });
         if (prior.status === 'unknown') {
-          // Never assume. Try again shortly; the reconciliation job pages if a tranche stays
-          // pending for an hour.
-          await sql.begin((tx) => later(tx, 'card.load', { trancheId }, 5));
+          // Never assume: either answer could be wrong, and both are expensive (a double load
+          // or a runner stranded at a stall). Ask again, less often as time passes, and after
+          // ISSUER_UNKNOWN_GIVE_UP_MS hand it to a person instead of asking forever.
+          const startedAt = rows.find((a) => a.idem_key === idemKey)?.created_at ?? new Date();
+          const age = Date.now() - startedAt.getTime();
+          if (age > ISSUER_UNKNOWN_GIVE_UP_MS) {
+            metrics.increment('card.issuer_outcome_unknown');
+            throw new Error(`issuer cannot say whether load ${idemKey} happened after ${Math.round(age / 60_000)} minutes; needs a human`);
+          }
+          await sql.begin((tx) => later(tx, 'card.load', { trancheId }, unknownRetryDelaySeconds(age)));
           return;
         }
         if (prior.status === 'succeeded') return completeTranche(ctx, trancheId, prior.providerRef, { idemKey });
@@ -164,12 +200,22 @@ export const cardLoad: Handler = async (payload, ctx) => {
         });
         await sql`UPDATE card_attempt SET provider_ref = ${conversationId} WHERE id = ${attempt.id}`;
       } catch (err) {
-        // A till cannot take cents, and a rail outage is not a decline: either way this rung
-        // is over and the ladder moves on to the next.
-        const code = err instanceof MpesaAmountError ? 'not_whole_shilling' : 'rail_unavailable';
-        await sql`UPDATE card_attempt SET result = 'error', provider_code = ${code}, settled_at = now() WHERE id = ${attempt.id}`;
-        await sql.begin((tx) => later(tx, 'card.load', { trancheId }, 1));
+        if (isDefinitiveRejection(err)) {
+          // A till cannot take cents, and Safaricom refusing the request is not a payment:
+          // either way this rung is over and the ladder moves on to the next.
+          const code = err instanceof MpesaAmountError ? 'not_whole_shilling' : 'rail_rejected';
+          await sql`UPDATE card_attempt SET result = 'error', provider_code = ${code}, settled_at = now() WHERE id = ${attempt.id}`;
+          await sql.begin((tx) => later(tx, 'card.load', { trancheId }, 1));
+          return;
+        }
+        // A timeout is NOT a decline: the vendor may have been paid. Moving on to the cash
+        // rung here is how a stall gets paid twice. The attempt stays pending for its result
+        // (matched by originator id), and the watchdog wake below asks a human if none comes.
+        log.warn({ err }, 'till payment outcome unknown; waiting for its result');
+        metrics.increment('mpesa.outcome_unknown', { op: 'till' });
+        await sql`UPDATE card_attempt SET provider_code = 'request_unconfirmed' WHERE id = ${attempt.id} AND result = 'pending'`;
       }
+      await sql.begin((tx) => later(tx, 'card.load', { trancheId, wake: 'till_result' }, TILL_RESULT_TIMEOUT_MS / 1000 + 5));
       return;
     }
 

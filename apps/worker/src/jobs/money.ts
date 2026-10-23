@@ -88,8 +88,11 @@ export async function voidAndReturn(ctx: JobContext, errandId: string): Promise<
   const [c] = await sql<{ id: string; issuer_ref: string; voided_at: Date | null }[]>`
     SELECT id, issuer_ref, voided_at FROM card WHERE errand_id = ${errandId}`;
   if (!c || c.voided_at) return;
-  const left = Number(await issuer.getBalance(c.issuer_ref));
-  await issuer.voidCard({ issuerRef: c.issuer_ref, idemKey: `void:${errandId}` });
+  // What the close swept off the card, as the issuer reports it. It used to be a balance read
+  // BEFORE the void: a tap at the till in between was then returned to escrow as "unspent"
+  // although the vendor had been paid with it.
+  const { sweptCents } = await issuer.voidCard({ issuerRef: c.issuer_ref, idemKey: `void:${errandId}` });
+  const left = Number(sweptCents);
   await sql.begin(async (tx) => {
     const e = await errandFor(tx, errandId);
     if (!e) return;

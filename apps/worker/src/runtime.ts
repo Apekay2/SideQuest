@@ -7,7 +7,8 @@ import { Redis } from 'ioredis';
 import { Queue, Worker, type Job } from 'bullmq';
 import type { Config } from '@sidequest/config';
 import { createDb, enqueueOutbox, type Sql } from '@sidequest/db';
-import { MockIssuer, FakeMpesa, Daraja, ConsoleSms, AfricasTalkingSms, ConsolePush, ExpoPush, LocalStorage, R2Storage } from '@sidequest/adapters';
+import { MockIssuer, NoCardIssuer, FakeMpesa, Daraja, ConsoleSms, AfricasTalkingSms, ConsolePush, ExpoPush, LocalStorage, R2Storage } from '@sidequest/adapters';
+import type { IssuerPort } from '@sidequest/domain/card/issuer.port';
 import { logger } from '@sidequest/observability';
 import type { WorkerDeps, JobContext } from './context.js';
 import { HANDLERS } from './handlers.js';
@@ -31,7 +32,7 @@ export function buildWorkerDeps(cfg: Config, over: Partial<WorkerDeps> = {}): Wo
     redis,
     // In development the mock spends each load at once, as a runner paying the exact stall
     // total would; tests drive spending explicitly with simulateSpend.
-    issuer: over.issuer ?? new MockIssuer(redis, { autoSpend: cfg.NODE_ENV === 'development' }),
+    issuer: over.issuer ?? issuerFor(cfg, redis),
     mpesa: over.mpesa ?? (cfg.DARAJA_DRIVER === 'fake'
       ? new FakeMpesa(deliverToOutbox(sql), cfg.NODE_ENV === 'test' ? 0 : 800)
       : new Daraja({
@@ -49,6 +50,23 @@ export function buildWorkerDeps(cfg: Config, over: Partial<WorkerDeps> = {}): Wo
       : new R2Storage({ accountId: cfg.R2_ACCOUNT_ID!, accessKeyId: cfg.R2_ACCESS_KEY_ID!,
           secretAccessKey: cfg.R2_SECRET_ACCESS_KEY!, bucket: cfg.R2_BUCKET! })),
   };
+}
+
+/**
+ * The card issuer for this environment. Fails closed: a driver without an adapter refuses to
+ * boot. It used to build the mock issuer whatever ISSUER_DRIVER said, so a production
+ * environment configured for a live issuer would have "loaded" cards that existed only in
+ * Redis, and recorded vendor payments that never happened.
+ */
+export function issuerFor(cfg: Config, redis: Redis): IssuerPort {
+  switch (cfg.ISSUER_DRIVER) {
+    case 'mock':
+      return new MockIssuer(redis, { autoSpend: cfg.NODE_ENV === 'development' });
+    case 'none':
+      return new NoCardIssuer();
+    default:
+      throw new Error(`ISSUER_DRIVER=${cfg.ISSUER_DRIVER} has no adapter in this build. Use ISSUER_DRIVER=none (till and cash rungs only) until the issuer integration ships.`);
+  }
 }
 
 const KNOWN = new Set(Object.keys(HANDLERS));

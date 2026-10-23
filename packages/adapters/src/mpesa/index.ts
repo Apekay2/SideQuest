@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { MpesaPort, MpesaResult } from '@sidequest/domain/rails/mpesa.port';
-import { toShillings } from '@sidequest/domain/rails/mpesa.port';
+import { toShillings, MpesaRejectedError, MpesaUnknownOutcomeError } from '@sidequest/domain/rails/mpesa.port';
 import { logger } from '@sidequest/observability';
 
 // ─────────────────────────────────────────────── callback parsing
@@ -35,6 +35,9 @@ export function parseCallback(kind: 'stk' | 'result', body: unknown): MpesaResul
       resultDesc: String(cb.ResultDesc ?? ''),
       amountCents: typeof amount === 'number' ? Math.round(amount * 100) : null,
       receipt: typeof get('MpesaReceiptNumber') === 'string' ? String(get('MpesaReceiptNumber')) : null,
+      // Used only to match a callback whose push request timed out before we learned its
+      // CheckoutRequestID (payments.ts onStk). Safaricom sends it as a number.
+      msisdn: get('PhoneNumber') !== undefined ? String(get('PhoneNumber')).replace(/\D/g, '') : null,
     };
   }
   const r = (body as { Result?: Record<string, unknown> }).Result;
@@ -53,6 +56,7 @@ export function parseCallback(kind: 'stk' | 'result', body: unknown): MpesaResul
     resultDesc: String(r.ResultDesc ?? ''),
     amountCents: typeof amount === 'number' ? Math.round(amount * 100) : null,
     receipt: typeof r.TransactionID === 'string' ? r.TransactionID : null,
+    originator: originator || null,
   };
 }
 
@@ -159,20 +163,44 @@ export class Daraja implements MpesaPort {
     return this.token.value;
   }
 
+  /**
+   * POST to Daraja, classifying every failure as either a rejection (Safaricom refused the
+   * request; nothing will happen) or an unknown outcome (we cannot tell whether it was
+   * accepted). The distinction is what keeps a timed-out B2C from being reversed and then paid
+   * anyway: callers undo their side only on MpesaRejectedError.
+   */
   private async post<T>(path: string, body: unknown): Promise<T> {
-    const res = await fetch(`${this.host}${path}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${await this.accessToken()}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(15_000),
-    });
-    const json = (await res.json().catch(() => ({}))) as T & { errorMessage?: string; ResponseCode?: string };
-    // Provider messages are logged, never echoed to a client (09-appsec §error scrubbing).
-    if (!res.ok || (json.ResponseCode !== undefined && json.ResponseCode !== '0')) {
-      logger.warn({ path, status: res.status, err: json.errorMessage }, 'daraja request rejected');
-      throw new Error(`Daraja ${path} rejected (${res.status})`);
+    let token: string;
+    try {
+      token = await this.accessToken();
+    } catch (err) {
+      // No request was sent without a token, so nothing can have started.
+      throw new MpesaRejectedError(`Daraja auth failed before ${path}: ${(err as Error).message}`);
     }
-    return json;
+    let res: Response;
+    try {
+      res = await fetch(`${this.host}${path}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch (err) {
+      // Timeout or a dropped connection: the request may have reached Safaricom.
+      logger.warn({ path, err: (err as Error).name }, 'daraja request outcome unknown');
+      throw new MpesaUnknownOutcomeError(`Daraja ${path}: no response (${(err as Error).name})`);
+    }
+    const parsed = (await res.json().catch(() => null)) as (T & { errorMessage?: string; errorCode?: string; ResponseCode?: string }) | null;
+    // Provider messages are logged, never echoed to a client (09-appsec §error scrubbing).
+    if (res.status >= 500 || parsed === null) {
+      logger.warn({ path, status: res.status }, 'daraja request outcome unknown');
+      throw new MpesaUnknownOutcomeError(`Daraja ${path}: status ${res.status}${parsed === null ? ', unreadable body' : ''}`);
+    }
+    if (!res.ok || (parsed.ResponseCode !== undefined && parsed.ResponseCode !== '0')) {
+      logger.warn({ path, status: res.status, err: parsed.errorMessage, code: parsed.errorCode }, 'daraja request rejected');
+      throw new MpesaRejectedError(`Daraja ${path} rejected (${res.status})`, res.status);
+    }
+    return parsed;
   }
 
   private timestamp(): string {

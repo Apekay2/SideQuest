@@ -32,8 +32,16 @@ export interface IssuerPort {
     idemKey: string;
   }): Promise<LoadResult>;
 
-  /** Remove all remaining value and close the card. Safe to call more than once. */
-  voidCard(args: { issuerRef: string; idemKey: string }): Promise<void>;
+  /**
+   * Close the card and remove whatever value is still on it, returning how much that was.
+   * MUST be idempotent on `idemKey`: a repeat returns the same `sweptCents`, so a worker that
+   * crashed between this call and its commit still returns the right amount to escrow.
+   *
+   * The amount comes from the close itself, never from a balance read beforehand: a runner
+   * tapping the card between a read and the close would otherwise be "refunded" money they
+   * had just spent at the till.
+   */
+  voidCard(args: { issuerRef: string; idemKey: string }): Promise<{ sweptCents: Cents }>;
 
   /**
    * What happened to an earlier load, looked up by the idempotency key we sent.

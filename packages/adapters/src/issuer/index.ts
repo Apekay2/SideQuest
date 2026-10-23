@@ -78,8 +78,21 @@ export class MockIssuer implements IssuerPort {
     await this.redis.hincrby(this.k('card', issuerRef), 'balance', -amountCents);
   }
 
-  async voidCard(args: { issuerRef: string; idemKey: string }): Promise<void> {
-    await this.redis.hset(this.k('card', args.issuerRef), { voided: '1', balance: '0' });
+  /**
+   * Close and sweep in one atomic step (a Lua script), remembering the result under the
+   * idempotency key so a repeat answers the same amount, as a real issuer's close would.
+   */
+  async voidCard(args: { issuerRef: string; idemKey: string }): Promise<{ sweptCents: Cents }> {
+    const swept = await this.redis.eval(
+      `local prior = redis.call('GET', KEYS[2])
+       if prior then return tonumber(prior) end
+       local bal = tonumber(redis.call('HGET', KEYS[1], 'balance') or '0')
+       redis.call('HSET', KEYS[1], 'voided', '1', 'balance', '0')
+       redis.call('SET', KEYS[2], tostring(bal))
+       return bal`,
+      2, this.k('card', args.issuerRef), this.k('void', args.idemKey),
+    );
+    return { sweptCents: cents(Number(swept ?? 0)) };
   }
 
   async getLoad(args: { issuerRef: string; idemKey: string }) {
@@ -96,5 +109,34 @@ export class MockIssuer implements IssuerPort {
   async getBalance(issuerRef: string): Promise<Cents> {
     const b = await this.redis.hget(this.k('card', issuerRef), 'balance');
     return cents(Number(b ?? 0));
+  }
+}
+
+/**
+ * `ISSUER_DRIVER=none`: launch without a card-issuing partner. Every errand still gets a card
+ * row (the tranche, ladder and ledger shapes are unchanged), but nothing is ever loaded on it:
+ * each load is a terminal decline, so the decline ladder goes straight to the vendor's M-Pesa
+ * till and then to requester-approved cash reimbursement — both of which exist without a card
+ * partner. When an issuer is signed, its adapter replaces this and the card rung comes back.
+ */
+export class NoCardIssuer implements IssuerPort {
+  async createCard(args: { errandId: string; ceilingCents: Cents; holderName: string; idemKey: string }): Promise<IssuedCard> {
+    return { issuerRef: `nocard:${args.errandId}`, last4: '0000' };
+  }
+
+  async loadCard(): Promise<LoadResult> {
+    return { ok: false, retryable: false, code: 'card_unavailable', message: 'No card issuer is configured' };
+  }
+
+  async voidCard(): Promise<{ sweptCents: Cents }> {
+    return { sweptCents: cents(0) };
+  }
+
+  async getLoad() {
+    return { status: 'failed' as const, code: 'card_unavailable' };
+  }
+
+  async getBalance(): Promise<Cents> {
+    return cents(0);
   }
 }

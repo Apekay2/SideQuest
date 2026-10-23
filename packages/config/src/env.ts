@@ -117,7 +117,12 @@ const Env = z.object({
    *  verification, so a forged confirmation never reaches the money path. */
   DARAJA_SOURCE_CIDRS: z.string().default('').transform((s) => s.split(',').map((x) => x.trim()).filter(Boolean)),
 
-  ISSUER_DRIVER: z.enum(['mock', 'union']).default('mock'),
+  /**
+   * `none`: no card partner — the decline ladder starts at the vendor's M-Pesa till (the
+   * pilot configuration). `union` is reserved for the issuing partner; its adapter is not in
+   * this build, and the worker refuses to start with it rather than fall back to the mock.
+   */
+  ISSUER_DRIVER: z.enum(['mock', 'none', 'union']).default('mock'),
   ISSUER_BASE_URL: z.string().url().optional(),
   ISSUER_API_KEY: secret(24).optional(),
   ISSUER_WEBHOOK_SECRET: secret(32).optional(),

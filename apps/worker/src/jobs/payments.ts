@@ -7,12 +7,13 @@
 // checkout reference, a payout or till attempt by its conversation id. An unmatched callback
 // is recorded and ignored, which is what turns a forged confirmation into a dead end.
 
-import { insertPostingGroup, ledgerBalance } from '@sidequest/db';
+import { insertPostingGroup, ledgerBalance, type Tx } from '@sidequest/db';
 import { topUp, fundEscrow, payout, payoutReversal, withdraw } from '@sidequest/domain/ledger/posting';
 import { depositTotal } from '@sidequest/domain/pricing/fees';
 import { nextStatus } from '@sidequest/domain/errand/machine';
 import { cents } from '@sidequest/domain/money/money';
 import { parseCallback } from '@sidequest/adapters';
+import { isDefinitiveRejection } from '@sidequest/domain/rails/mpesa.port';
 import { metrics } from '@sidequest/observability';
 import { type Handler, type JobContext, publish, later, str } from '../context.js';
 import { completeTranche } from './card-load.job.js';
@@ -45,11 +46,45 @@ export const paymentStk: Handler = async (payload, ctx) => {
     });
     await ctx.deps.sql`UPDATE payment SET provider_ref = ${checkoutRef} WHERE id = ${paymentId}`;
   } catch (err) {
-    ctx.log.error({ err, paymentId }, 'stk push failed');
-    await ctx.deps.sql`UPDATE payment SET status = 'failed', failure_code = 'push_failed' WHERE id = ${paymentId}`;
-    await publish(ctx.deps, p.account_id, 'payment.failed', { payment_id: paymentId });
+    if (isDefinitiveRejection(err)) {
+      ctx.log.error({ err, paymentId }, 'stk push rejected');
+      await ctx.deps.sql`UPDATE payment SET status = 'failed', failure_code = 'push_failed' WHERE id = ${paymentId}`;
+      await publish(ctx.deps, p.account_id, 'payment.failed', { payment_id: paymentId });
+      return;
+    }
+    // The push may have reached the customer's phone. Marking it failed would leave a customer
+    // who then pays with money we never credit: the callback could not be matched. It stays
+    // pending, without a checkout reference, and onStk matches its callback by number and
+    // amount instead; the sweeper expires it if nothing arrives.
+    ctx.log.warn({ err, paymentId }, 'stk push outcome unknown; waiting for the callback');
+    metrics.increment('mpesa.outcome_unknown', { op: 'stk' });
+    await ctx.deps.sql`UPDATE payment SET failure_code = 'push_unconfirmed' WHERE id = ${paymentId} AND status = 'pending'`;
   }
 };
+
+/**
+ * A push whose request timed out has no CheckoutRequestID on our side. Its callback is matched
+ * by what Safaricom does report — the paying number and the amount — against exactly one such
+ * unconfirmed payment from the last 30 minutes. Two candidates is ambiguous, and a human
+ * decides (reconciliation reports unmatched receipts).
+ */
+async function matchUnconfirmedPush(
+  tx: Tx,
+  r: NonNullable<ReturnType<typeof parseCallback>>,
+): Promise<string | null> {
+  if (!r.ok || !r.msisdn || r.amountCents === null) return null;
+  const candidates = await tx<{ id: string }[]>`
+    SELECT p.id FROM payment p JOIN account a ON a.id = p.account_id
+     WHERE p.provider = 'daraja' AND p.direction = 'in' AND p.status = 'pending'
+       AND p.provider_ref IS NULL AND p.failure_code = 'push_unconfirmed'
+       AND p.amount_cents = ${r.amountCents}
+       AND replace(a.msisdn, '+', '') = ${r.msisdn}
+       AND p.created_at > now() - interval '30 minutes'
+     FOR UPDATE OF p`;
+  if (candidates.length !== 1) return null;
+  await tx`UPDATE payment SET provider_ref = ${r.ref} WHERE id = ${candidates[0]!.id}`;
+  return candidates[0]!.id;
+}
 
 /** Every Daraja callback lands here, from the webhook route or from the fake driver. */
 export const mpesaCallback: Handler = async (payload, ctx) => {
@@ -72,9 +107,17 @@ export const mpesaCallback: Handler = async (payload, ctx) => {
 async function onStk(ctx: JobContext, r: NonNullable<ReturnType<typeof parseCallback>>) {
   const { sql, cfg } = ctx.deps;
   const out = await sql.begin(async (tx) => {
-    const [p] = await tx<{ id: string; account_id: string; errand_id: string | null; amount_cents: number; status: string }[]>`
+    let [p] = await tx<{ id: string; account_id: string; errand_id: string | null; amount_cents: number; status: string }[]>`
       SELECT id, account_id, errand_id, amount_cents, status FROM payment
        WHERE provider = 'daraja' AND provider_ref = ${r.ref} FOR UPDATE`;
+    if (!p) {
+      const matched = await matchUnconfirmedPush(tx, r);
+      if (matched) {
+        [p] = await tx<{ id: string; account_id: string; errand_id: string | null; amount_cents: number; status: string }[]>`
+          SELECT id, account_id, errand_id, amount_cents, status FROM payment WHERE id = ${matched} FOR UPDATE`;
+        metrics.increment('mpesa.callback_matched_by_payer');
+      }
+    }
     if (!p) { metrics.increment('mpesa.callback_unmatched', { kind: 'stk' }); return null; }
     if (p.status === 'confirmed' || p.status === 'failed') return null;   // duplicate callback
     if (!r.ok) {
@@ -98,6 +141,10 @@ async function onStk(ctx: JobContext, r: NonNullable<ReturnType<typeof parseCall
         SELECT id, status, requester_id, spend_cap_cents, max_fee_cents, bonus_cents, auction_minutes, currency
           FROM errand WHERE id = ${p.errand_id} FOR UPDATE`;
       if (e && e.status === 'awaiting_funds') {
+        // The same per-wallet lock the API's fund and withdraw paths take: without it a
+        // withdrawal racing this callback could spend the balance this deposit is checked
+        // against, and the wallet would go negative.
+        await tx`SELECT pg_advisory_xact_lock(hashtext(${'wallet:' + e.requester_id}))`;
         const deposit = depositTotal({
           agreedFeeCents: cents(e.max_fee_cents), goodsCapCents: cents(e.spend_cap_cents),
           bonusCents: cents(e.bonus_cents), rateBps: cfg.PLATFORM_FEE_BPS,
@@ -122,9 +169,23 @@ async function onStk(ctx: JobContext, r: NonNullable<ReturnType<typeof parseCall
   }
 }
 
+/** `till:<key>` → `<key>`; anything else → null. */
+function originatorKey(r: NonNullable<ReturnType<typeof parseCallback>>, prefix: 'till:' | 'b2c:'): string | null {
+  return r.originator && r.originator.startsWith(prefix) ? r.originator.slice(prefix.length) : null;
+}
+
 async function onTill(ctx: JobContext, r: NonNullable<ReturnType<typeof parseCallback>>) {
-  const [a] = await ctx.deps.sql<{ id: string; tranche_id: string; result: string }[]>`
+  let [a] = await ctx.deps.sql<{ id: string; tranche_id: string; result: string }[]>`
     SELECT id, tranche_id, result FROM card_attempt WHERE rung = 'mpesa_till' AND provider_ref = ${r.ref}`;
+  // A request that timed out never stored Safaricom's ConversationID; the originator id we sent
+  // (till:<attempt idem key>) still finds it.
+  const key = originatorKey(r, 'till:');
+  if (!a && key) {
+    [a] = await ctx.deps.sql<{ id: string; tranche_id: string; result: string }[]>`
+      UPDATE card_attempt SET provider_ref = COALESCE(provider_ref, ${r.ref})
+       WHERE rung = 'mpesa_till' AND idem_key = ${key}
+      RETURNING id, tranche_id, result`;
+  }
   if (!a) { metrics.increment('mpesa.callback_unmatched', { kind: 'till' }); return; }
   if (a.result !== 'pending') return;
   if (r.ok) {
@@ -141,8 +202,16 @@ async function onTill(ctx: JobContext, r: NonNullable<ReturnType<typeof parseCal
 async function onB2c(ctx: JobContext, r: NonNullable<ReturnType<typeof parseCallback>>) {
   const { sql } = ctx.deps;
   const out = await sql.begin(async (tx) => {
-    const [po] = await tx<{ id: string; runner_id: string; amount_cents: number; status: string; currency: 'KES' }[]>`
+    const key = originatorKey(r, 'b2c:');
+    let [po] = await tx<{ id: string; runner_id: string; amount_cents: number; status: string; currency: 'KES' }[]>`
       SELECT id, runner_id, amount_cents, status, currency FROM payout WHERE provider_ref = ${r.ref} FOR UPDATE`;
+    if (!po && key) {
+      // The B2C request timed out before its ConversationID reached us (payoutSend left it
+      // `sent`); the originator id carries the payout's idempotency key.
+      [po] = await tx<{ id: string; runner_id: string; amount_cents: number; status: string; currency: 'KES' }[]>`
+        SELECT id, runner_id, amount_cents, status, currency FROM payout WHERE idem_key = ${key} FOR UPDATE`;
+      if (po) await tx`UPDATE payout SET provider_ref = COALESCE(provider_ref, ${r.ref}) WHERE id = ${po.id}`;
+    }
     if (po) {
       if (po.status !== 'sent') return null;
       if (r.ok) {
@@ -155,9 +224,15 @@ async function onB2c(ctx: JobContext, r: NonNullable<ReturnType<typeof parseCall
       await later(tx, 'notify', { accountId: po.runner_id, template: r.ok ? 'payout.confirmed' : 'payout.failed', vars: { amountCents: po.amount_cents } });
       return { who: po.runner_id, event: r.ok ? 'payout.confirmed' : 'payout.failed', id: po.id };
     }
-    const [pm] = await tx<{ id: string; account_id: string; amount_cents: number; status: string }[]>`
+    let [pm] = await tx<{ id: string; account_id: string; amount_cents: number; status: string }[]>`
       SELECT id, account_id, amount_cents, status FROM payment
        WHERE direction = 'out' AND provider = 'daraja' AND provider_ref = ${r.ref} FOR UPDATE`;
+    if (!pm && key) {
+      [pm] = await tx<{ id: string; account_id: string; amount_cents: number; status: string }[]>`
+        SELECT id, account_id, amount_cents, status FROM payment
+         WHERE direction = 'out' AND provider = 'daraja' AND idem_key = ${key} FOR UPDATE`;
+      if (pm) await tx`UPDATE payment SET provider_ref = COALESCE(provider_ref, ${r.ref}) WHERE id = ${pm.id}`;
+    }
     if (!pm) { metrics.increment('mpesa.callback_unmatched', { kind: 'b2c' }); return null; }
     if (pm.status !== 'pending') return null;
     if (r.ok) {
@@ -200,7 +275,17 @@ export const payoutSend: Handler = async (payload, ctx) => {
     });
     await sql`UPDATE payout SET provider_ref = ${conversationId} WHERE id = ${po.id}`;
   } catch (err) {
-    ctx.log.error({ err, payoutId }, 'b2c request failed; reversing');
+    if (!isDefinitiveRejection(err)) {
+      // A timeout is not a failure. Safaricom may have paid; reversing now would let the
+      // runner withdraw the same earnings again when the money has already reached them.
+      // The payout stays `sent`; its result callback (matched by originator id) closes it,
+      // and reconciliation tickets one that stays unconfirmed.
+      ctx.log.warn({ err, payoutId }, 'b2c outcome unknown; leaving the payout open for its result');
+      metrics.increment('mpesa.outcome_unknown', { op: 'b2c' });
+      await sql`UPDATE payout SET failure_code = 'request_unconfirmed' WHERE id = ${po.id} AND status = 'sent'`;
+      return;
+    }
+    ctx.log.error({ err, payoutId }, 'b2c request rejected; reversing');
     await sql.begin(async (tx) => {
       const moved = await tx`UPDATE payout SET status = 'failed', failure_code = 'request_failed' WHERE id = ${po.id} AND status = 'sent' RETURNING id`;
       if (moved.length) await insertPostingGroup(tx, payoutReversal({ runnerId: po.runner_id, amountCents: cents(po.amount_cents), currency: po.currency }));
@@ -233,7 +318,14 @@ export const paymentWithdraw: Handler = async (payload, ctx) => {
     });
     await sql`UPDATE payment SET provider_ref = ${conversationId} WHERE id = ${pm.id}`;
   } catch (err) {
-    ctx.log.error({ err, paymentId }, 'withdraw b2c failed; reversing');
+    if (!isDefinitiveRejection(err)) {
+      // Same reasoning as a payout: an unknown outcome is left open for its result callback.
+      ctx.log.warn({ err, paymentId }, 'withdraw b2c outcome unknown; leaving it open for its result');
+      metrics.increment('mpesa.outcome_unknown', { op: 'withdraw' });
+      await sql`UPDATE payment SET failure_code = 'request_unconfirmed' WHERE id = ${pm.id} AND status = 'pending'`;
+      return;
+    }
+    ctx.log.error({ err, paymentId }, 'withdraw b2c rejected; reversing');
     await sql.begin(async (tx) => {
       const moved = await tx`UPDATE payment SET status = 'failed', failure_code = 'request_failed' WHERE id = ${pm.id} AND status = 'pending' RETURNING id`;
       if (moved.length) await insertPostingGroup(tx, topUp({ userId: pm.account_id, amountCents: cents(pm.amount_cents), currency: 'KES' }));
