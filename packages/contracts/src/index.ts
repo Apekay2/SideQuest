@@ -215,7 +215,8 @@ export interface FeedItem {
   auction_closes_at: string | null; my_bid_cents: number | null;
 }
 export interface NearbyRunner {
-  runner_id: string; display_name: string; distance_band: string; cell_r9: string;
+  /** The runner's res-8 H3 cell (~0.7 km²): enough to cluster a map, too coarse to follow anyone. */
+  runner_id: string; display_name: string; distance_band: string; cell_r8: string;
   completed_with_you: number; fix_age_seconds: number;
 }
 export interface BidView {
@@ -345,5 +346,7 @@ export const ERROR_CODES = [
   'PAYOUT_FAILED', 'IDEMPOTENCY_CONFLICT', 'RATE_LIMITED', 'NOT_FOUND', 'FORBIDDEN',
   'ALREADY_ASSIGNED', 'LINK_NOT_ESTABLISHED', 'CONSENT_REQUIRED', 'VALIDATION',
   'LEGAL_ACCEPTANCE_REQUIRED', 'ACCOUNT_HAS_BALANCE', 'LIVE_ERRANDS', 'OPEN_DISPUTE',
+  'ESCROW_FROZEN', 'ALREADY_RULED', 'DISPUTE_WINDOW_CLOSED', 'IDEMPOTENCY_ABANDONED', 'IDEMPOTENCY_IN_FLIGHT',
+  'FOUR_EYES_REQUIRED',
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];

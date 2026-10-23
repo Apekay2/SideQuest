@@ -792,7 +792,7 @@ export interface FeedItem {
   bonus_cents: number; deadline_at: string | null; distance_band: string; stall_count: number;
   auction_closes_at: string | null; my_bid_cents: number | null;
 }
-export interface NearbyRunner { runner_id: string; display_name: string; distance_band: string; cell_r9: string; completed_with_you: number; fix_age_seconds: number }
+export interface NearbyRunner { runner_id: string; display_name: string; distance_band: string; cell_r8: string; completed_with_you: number; fix_age_seconds: number }
 export interface BidView { id: string; runner: Counterparty & { completed_jobs: number }; fee_cents: number; eta_minutes: number; note: string | null; status: string }
 export type BidsResponse = { sealed: true; count: number; closes_at: string } | { sealed: false; bids: BidView[] };
 

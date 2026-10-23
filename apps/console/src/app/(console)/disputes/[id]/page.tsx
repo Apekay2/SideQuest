@@ -6,7 +6,7 @@ import { RulingForm } from '../RulingForm';
 import { Photo } from '../../Photo';
 
 interface Pack {
-  dispute: { id: string; errand_id: string; reason: string; detail: string | null; raised_by: string; status: string; created_at: string };
+  dispute: { id: string; errand_id: string; reason: string; detail: string | null; raised_by: string | null; origin?: 'party' | 'system'; status: string; created_at: string };
   errand: { id: string; title: string; kind: string; status: string; requester_id: string; runner_id: string | null;
             spend_cap_cents: number; spent_cents: number; agreed_fee_cents: number | null; bonus_cents: number; handover_at: string | null };
   escrow_cents: number | null;
@@ -41,7 +41,9 @@ export default async function Dispute({ params }: { params: Promise<{ id: string
 
 function Detail({ pack, canRule, canTrace }: { pack: Pack; canRule: boolean; canTrace: boolean }) {
   const { dispute: d, errand: e } = pack;
-  const party = (accountId: string) => (accountId === e.requester_id ? 'Requester' : accountId === e.runner_id ? 'Runner' : 'Staff');
+  // A dispute the watchdog opened on a stuck errand has no raiser (0012_hardening.sql §2).
+  const party = (accountId: string | null) => (accountId === null ? 'Side Qwest (automatic, errand stuck)'
+    : accountId === e.requester_id ? 'Requester' : accountId === e.runner_id ? 'Runner' : 'Staff');
   const photos = pack.evidence;
   const rejected = photos.filter((x) => x.rejected).length;
   const approved = pack.stalls.filter((s) => s.status === 'approved' || s.status === 'substituted');

@@ -202,7 +202,8 @@ export const errandExpire: Handler = async (payload, ctx) => {
       SELECT (auction_closes_at + make_interval(mins => ${EXPIRE_GRACE_MINUTES}) <= now()) AS due FROM errand WHERE id = ${errandId}`;
     if (!due?.due) return null;
     const from = e.status === 'offered' ? nextStatus('offered', 'offer_lapsed', 'system') : e.status;
-    await tx`UPDATE errand SET status = ${nextStatus(from, 'auction_expired', 'system')}, offered_to = NULL, updated_at = now()
+    await tx`UPDATE errand SET status = ${nextStatus(from, 'auction_expired', 'system')}, offered_to = NULL,
+                              agreed_fee_cents = NULL, updated_at = now()
               WHERE id = ${errandId}`;
     await tx`UPDATE errand_offer SET outcome = 'lapsed', resolved_at = now() WHERE errand_id = ${errandId} AND outcome = 'pending'`;
     await tx`UPDATE bid SET status = 'lost' WHERE errand_id = ${errandId} AND status = 'sealed'`;

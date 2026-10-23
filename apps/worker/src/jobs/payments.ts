@@ -34,11 +34,14 @@ export const paymentStk: Handler = async (payload, ctx) => {
   // STK has no idempotency key at Safaricom, so the payment row is the guard: a push is sent
   // once, while the row is still `initiated`, and never again.
   if (!p || p.status !== 'initiated' || p.provider_ref) return;
+  // Looked up before the rail call: a failure here means nothing was sent, and must not be
+  // mistaken below for a rail whose outcome is unknown.
+  const msisdn = await msisdnOf(ctx, p.account_id);
   const claimed = await ctx.deps.sql`UPDATE payment SET status = 'pending' WHERE id = ${paymentId} AND status = 'initiated' RETURNING id`;
   if (claimed.length === 0) return;
   try {
     const { checkoutRef } = await ctx.deps.mpesa.stkPush({
-      msisdn: await msisdnOf(ctx, p.account_id),
+      msisdn,
       amountCents: cents(p.amount_cents),
       accountRef: p.errand_id ? `SQ${p.errand_id.slice(0, 8)}` : 'SQWALLET',
       description: p.errand_id ? 'Side Qwest' : 'Top up',
@@ -269,9 +272,19 @@ export const payoutSend: Handler = async (payload, ctx) => {
     return po;
   });
   if (!po) return;
+  let msisdn: string;
+  try { msisdn = await msisdnOf(ctx, po.runner_id); } catch (err) {
+    // Nothing was sent: a definitive failure, safe to reverse.
+    ctx.log.error({ err, payoutId }, 'payout has no number to pay; reversing');
+    await sql.begin(async (tx) => {
+      const moved = await tx`UPDATE payout SET status = 'failed', failure_code = 'no_msisdn' WHERE id = ${po.id} AND status = 'sent' RETURNING id`;
+      if (moved.length) await insertPostingGroup(tx, payoutReversal({ runnerId: po.runner_id, amountCents: cents(po.amount_cents), currency: po.currency }));
+    });
+    return;
+  }
   try {
     const { conversationId } = await mpesa.b2c({
-      msisdn: await msisdnOf(ctx, po.runner_id), amountCents: cents(po.amount_cents), remarks: 'Side Qwest earnings', idemKey: po.idem_key,
+      msisdn, amountCents: cents(po.amount_cents), remarks: 'Side Qwest earnings', idemKey: po.idem_key,
     });
     await sql`UPDATE payout SET provider_ref = ${conversationId} WHERE id = ${po.id}`;
   } catch (err) {
@@ -312,9 +325,18 @@ export const paymentWithdraw: Handler = async (payload, ctx) => {
     return pm;
   });
   if (!pm) return;
+  let msisdn: string;
+  try { msisdn = await msisdnOf(ctx, pm.account_id); } catch (err) {
+    ctx.log.error({ err, paymentId }, 'withdrawal has no number to pay; reversing');
+    await sql.begin(async (tx) => {
+      const moved = await tx`UPDATE payment SET status = 'failed', failure_code = 'no_msisdn' WHERE id = ${pm.id} AND status = 'pending' RETURNING id`;
+      if (moved.length) await insertPostingGroup(tx, topUp({ userId: pm.account_id, amountCents: cents(pm.amount_cents), currency: 'KES' }));
+    });
+    return;
+  }
   try {
     const { conversationId } = await mpesa.b2c({
-      msisdn: await msisdnOf(ctx, pm.account_id), amountCents: cents(pm.amount_cents), remarks: 'Side Qwest refund', idemKey: pm.idem_key,
+      msisdn, amountCents: cents(pm.amount_cents), remarks: 'Side Qwest refund', idemKey: pm.idem_key,
     });
     await sql`UPDATE payment SET provider_ref = ${conversationId} WHERE id = ${pm.id}`;
   } catch (err) {

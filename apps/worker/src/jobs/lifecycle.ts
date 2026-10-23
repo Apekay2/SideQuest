@@ -17,7 +17,7 @@ export const offerExpire: Handler = async (payload, ctx) => {
     if (!o) return null;
     const [e] = await tx<{ requester_id: string }[]>`
       UPDATE errand SET status = ${nextStatus('offered', 'offer_lapsed', 'system')}, offered_to = NULL,
-             offer_expires_at = NULL, updated_at = now()
+             offer_expires_at = NULL, agreed_fee_cents = NULL, updated_at = now()
        WHERE id = ${o.errand_id} AND status = 'offered' AND runner_id IS NULL AND offered_to = ${o.runner_id}
       RETURNING requester_id`;
     return e?.requester_id ?? null;
@@ -61,11 +61,4 @@ export const errandPublished: Handler = async (payload, ctx) => {
   metrics.increment('feed.fanout', undefined, runners.length);
 };
 
-/**
- * SOS: the case is already recorded with its snapshot. This pages the on-call safety officer;
- * it never waits on anything, and it never fails quietly.
- */
-export const sosOpened: Handler = async (payload, ctx) => {
-  ctx.log.fatal({ sos: payload.sosId, errand: payload.errandId }, 'SOS raised — page the safety on-call');
-  metrics.increment('sos.opened');
-};
+// SOS escalation moved to jobs/safety.ts: it now pages the on-call until acknowledged.
