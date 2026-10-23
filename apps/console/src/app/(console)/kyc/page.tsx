@@ -3,10 +3,16 @@ import { api } from '@/lib/api';
 import { ref, waited } from '@/lib/format';
 import { Decision } from './Decision';
 
-interface Row { id: string; role: string; verification_tier: number; target_tier: number; age_seconds: number }
+interface Row { id: string; role: string; verification_tier: number; target_tier: number; age_seconds: number; first_reviewed_by?: string | null }
 
 export default async function KycQueue() {
-  const { data } = await api.get<{ data: Row[] }>('/ops/kyc');
+  // Two queues: new submissions, and tier-3 cases holding one approval that need a second,
+  // different officer (four eyes). The API refuses the same officer twice.
+  const [fresh, second] = await Promise.all([
+    api.get<{ data: Row[] }>('/ops/kyc?status=submitted'),
+    api.get<{ data: Row[] }>('/ops/kyc?status=in_review'),
+  ]);
+  const data = [...second.data, ...fresh.data];
   return (
     <>
       <h1>KYC queue</h1>
@@ -18,7 +24,7 @@ export default async function KycQueue() {
             {data.map((k) => (
               <tr key={k.id}>
                 <td><Link href={`/kyc/${k.id}`}>{ref('KYC', k.id)}</Link></td>
-                <td>tier {k.target_tier}</td>
+                <td>tier {k.target_tier}{k.first_reviewed_by ? <> <span className="pill sand">needs second approval</span></> : null}</td>
                 <td><span className="pill">{k.role === 'runner' ? 'Runner' : 'Requester'} · now tier {k.verification_tier}</span></td>
                 <td className="muted">{waited(k.age_seconds)}</td>
                 <td className="right"><Decision caseId={k.id} tier={k.target_tier} /></td>

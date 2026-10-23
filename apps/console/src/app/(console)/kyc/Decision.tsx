@@ -8,7 +8,7 @@ import { decide } from './actions';
 export function Decision({ caseId, tier, align = 'end' }: { caseId: string; tier: number; align?: 'end' | 'start' }) {
   const [asking, setAsking] = useState(false);
   const [reason, setReason] = useState('');
-  const [done, setDone] = useState<'approved' | 'rejected' | null>(null);
+  const [done, setDone] = useState<'approved' | 'rejected' | 'in_review' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
@@ -18,6 +18,8 @@ export function Decision({ caseId, tier, align = 'end' }: { caseId: string; tier
     if (r.ok) setDone(r.status!); else setError(r.error ?? 'Could not record the decision');
   });
 
+  // Tier 3 needs two officers: the first approval leaves the case in review for someone else.
+  if (done === 'in_review') return <span className="pill sand" role="status">First approval recorded · a second officer must clear it</span>;
   if (done) return <span className={`pill ${done === 'approved' ? 'sage' : 'strong'}`} role="status">{done === 'approved' ? `Cleared tier ${tier}` : 'Asked again'}</span>;
 
   return (

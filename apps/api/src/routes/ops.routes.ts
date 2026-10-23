@@ -36,7 +36,7 @@ export default async function opsRoutes(app: FastifyInstance) {
     const q = parse(z.object({ status: z.enum(['submitted', 'in_review', 'approved', 'rejected']).default('submitted') }), req.query);
     const rows = await app.opsTx(req, (tx) => tx`
       SELECT k.id, k.account_id, a.display_name, a.role, a.verification_tier, k.target_tier, k.status,
-             k.created_at, k.reviewed_at, k.reject_reason,
+             k.created_at, k.reviewed_at, k.reject_reason, k.first_reviewed_by, k.first_reviewed_at,
              extract(epoch FROM now() - k.created_at)::int AS age_seconds
         FROM kyc_case k JOIN account a ON a.id = k.account_id
        WHERE k.status = ${q.status}
@@ -79,12 +79,27 @@ export default async function opsRoutes(app: FastifyInstance) {
     const body = parse(KycDecision, req.body);
     if (!body.approve && !body.reason) throw new AppError(400, 'VALIDATION', 'A rejection needs a reason the applicant will read');
     return app.opsTx(req, async (tx) => {
-      const [c] = await tx<{ account_id: string; target_tier: number; status: string }[]>`
-        SELECT account_id, target_tier, status FROM kyc_case WHERE id = ${id} FOR UPDATE`;
+      const [c] = await tx<{ account_id: string; target_tier: number; status: string; first_reviewed_by: string | null }[]>`
+        SELECT account_id, target_tier, status, first_reviewed_by FROM kyc_case WHERE id = ${id} FOR UPDATE`;
       if (!c) throw notFound('Case not found');
       if (c.status !== 'submitted' && c.status !== 'in_review') throw new AppError(409, 'CASE_DECIDED', 'This case has already been decided');
       if (c.account_id === req.actor!.id) throw new AppError(403, 'FORBIDDEN', 'You cannot review your own case');
       const tier = body.approve ? (body.tier ?? c.target_tier) : null;
+
+      // Four eyes for tier 3: the tier that carries a spending card and shares live location
+      // with strangers. The first approval is recorded and the case waits in `in_review` for a
+      // second, different officer. A rejection needs only one.
+      if (body.approve && (tier ?? 0) >= 3) {
+        if (!c.first_reviewed_by) {
+          await tx`UPDATE kyc_case SET status = 'in_review', first_reviewed_by = ${req.actor!.id}, first_reviewed_at = now()
+                    WHERE id = ${id}`;
+          await audit(req, tx, 'kyc.first_approval', id, { tier });
+          return { id, status: 'in_review', tier: null, awaiting: 'second_review' as const };
+        }
+        if (c.first_reviewed_by === req.actor!.id) {
+          throw new AppError(403, 'FOUR_EYES_REQUIRED', 'A second officer must approve tier 3. You gave the first approval.');
+        }
+      }
       await tx`
         UPDATE kyc_case SET status = ${body.approve ? 'approved' : 'rejected'}, reviewed_by = ${req.actor!.id},
                reviewed_at = now(), reject_reason = ${body.reason ? cleanProse('reason', body.reason, 280) : null}

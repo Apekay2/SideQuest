@@ -288,7 +288,21 @@ describe('KYC review', () => {
     expect(view.body.next_of_kin.msisdn_masked).toBe('…678');
     expect(view.body.documents.selfie).toContain('/uploads/kyc/');
 
-    expect((await reviewer.client.post(`/ops/kyc/${c.body.id}/decide`, { approve: true })).status).toBe(200);
+    // Four eyes for tier 3: the first approval records itself and waits for a second officer.
+    const first = await reviewer.client.post(`/ops/kyc/${c.body.id}/decide`, { approve: true });
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({ status: 'in_review', awaiting: 'second_review' });
+    expect((await w.refresh(u)).role).toBe('runner');
+    expect((await u.client.get('/me')).body.verification_tier).toBe(1);
+    // The same officer cannot be the second pair of eyes.
+    const again = await reviewer.client.post(`/ops/kyc/${c.body.id}/decide`, { approve: true });
+    expect(again.status).toBe(403);
+    expect(again.body.code).toBe('FOUR_EYES_REQUIRED');
+    // It waits in the second-approval queue for someone else.
+    const second = await w.staff(['ops.read', 'kyc.review']);
+    const waiting = await second.client.get('/ops/kyc?status=in_review');
+    expect(waiting.body.data.find((k: any) => k.id === c.body.id)?.first_reviewed_by).toBe(reviewer.id);
+    expect((await second.client.post(`/ops/kyc/${c.body.id}/decide`, { approve: true })).body.status).toBe('approved');
     await w.refresh(u);
     const me = await u.client.get('/me');
     expect(me.body.verification_tier).toBe(3);

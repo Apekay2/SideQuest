@@ -245,7 +245,11 @@ export default async function authRoutes(app: FastifyInstance) {
         return { kind: 'reuse' as const, familyId: s.family_id };
       }
       await setScope(tx, 'app.actor_id', s.account_id);
-      await tx`UPDATE session SET rotated_at = now() WHERE id = ${s.id}`;
+      // Conditional: two refreshes racing with the same token both read rotated_at = NULL
+      // above. The second UPDATE waits on the first's row lock, then finds the token spent and
+      // matches nothing — so one token yields one successor, never two live sessions.
+      const rotated = await tx`UPDATE session SET rotated_at = now() WHERE id = ${s.id} AND rotated_at IS NULL RETURNING id`;
+      if (rotated.length === 0) return { kind: 'race' as const };
       const [account] = await tx<AccountRow[]>`
         SELECT id, display_name, role, verification_tier, language, market, staff_grants, suspended_at
           FROM account WHERE id = ${s.account_id}`;
@@ -257,6 +261,9 @@ export default async function authRoutes(app: FastifyInstance) {
       req.log.warn({ family: outcome.familyId }, 'refresh token reuse; family revoked');
       app.clearRefreshCookie(reply);
       throw new AppError(401, 'SESSION_REVOKED', 'Sign in again');
+    }
+    if (outcome.kind === 'race') {
+      throw new AppError(409, 'REFRESH_CONFLICT', 'This session was refreshed a moment ago. Try again.');
     }
     if (outcome.kind === 'invalid') {
       app.clearRefreshCookie(reply);

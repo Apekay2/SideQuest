@@ -31,7 +31,10 @@ async function call<T>(method: 'GET' | 'POST' | 'PUT', path: string, body?: unkn
   // The proxy refreshes ahead of expiry; a 401 here means the session was revoked.
   if (res.status === 401) redirect('/sign-in?expired=1');
   const text = await res.text();
-  const json = text ? JSON.parse(text) : null;
+  // A load balancer's HTML error page is not JSON; it must surface as an API error, not as a
+  // SyntaxError that takes the whole page down.
+  let json: any = null;
+  try { json = text ? JSON.parse(text) : null; } catch { json = null; }
   if (!res.ok) {
     throw new ApiError(res.status, json?.code ?? 'ERROR', json?.title ?? `Request failed (${res.status})`, json?.details);
   }

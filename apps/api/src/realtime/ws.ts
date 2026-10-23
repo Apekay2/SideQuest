@@ -18,8 +18,15 @@ import { verifyAccess, sessionLive } from '../plugins/auth.js';
 import type { Actor } from '../types.js';
 
 export const WS_REVALIDATE_MS = 60_000;
+/**
+ * Sockets one account may hold at once (phone, tablet, a reconnect overlapping its
+ * predecessor). Each socket costs memory and a session check a minute; without a cap one valid
+ * token could open thousands. The oldest is closed to make room, so a legitimate reconnect
+ * always gets in.
+ */
+export const WS_MAX_PER_ACCOUNT = 5;
 /** Close codes the client acts on: re-authenticate with a fresh token, don't hammer. */
-export const WS_CLOSE = { unauthenticated: 4401, expired: 4402, revoked: 4403 } as const;
+export const WS_CLOSE = { unauthenticated: 4401, expired: 4402, revoked: 4403, superseded: 4409 } as const;
 
 export default fp(async function realtime(app: FastifyInstance) {
   const { redisSub, cfg, sql } = app.deps;
@@ -64,6 +71,13 @@ export default fp(async function realtime(app: FastifyInstance) {
         await redisSub.subscribe(`u:${id}`);
       }
       set.add(socket);
+      // Over the cap: close the oldest (a Set iterates in insertion order).
+      while (set.size > WS_MAX_PER_ACCOUNT) {
+        const oldest = set.values().next().value as WebSocket | undefined;
+        if (!oldest) break;
+        set.delete(oldest);
+        oldest.close(WS_CLOSE.superseded, 'too many connections');
+      }
       count();
 
       timers.push(setTimeout(() => socket.close(WS_CLOSE.expired, 'token expired'), Math.max(0, exp * 1000 - Date.now())));
@@ -81,9 +95,12 @@ export default fp(async function realtime(app: FastifyInstance) {
       if (!actor) return;
       const set = sockets.get(actor.id);
       set?.delete(socket);
-      if (set && set.size === 0) {
+      if (set && set.size === 0 && sockets.get(actor.id) === set) {
         sockets.delete(actor.id);
         await redisSub.unsubscribe(`u:${actor.id}`).catch(() => undefined);
+        // A socket for the same account that signed in while we were unsubscribing found no
+        // set and subscribed again; if this unsubscribe landed after that, subscribe back.
+        if (sockets.has(actor.id)) await redisSub.subscribe(`u:${actor.id}`).catch(() => undefined);
       }
       count();
     });
