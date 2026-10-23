@@ -24,8 +24,10 @@ export function buildWorkerDeps(cfg: Config, over: Partial<WorkerDeps> = {}): Wo
   const redis = over.redis ?? new Redis(cfg.REDIS_URL, { maxRetriesPerRequest: null });
   // The fake rail delivers its callbacks exactly where the webhook route would: an outbox row
   // for mpesa.callback, so dev exercises the production parsing and matching path.
-  const deliverToOutbox = (s: Sql) => async (kind: 'stk' | 'result', body: unknown) => {
-    await s.begin((tx) => enqueueOutbox(tx, 'mpesa.callback', { kind, body: body as Record<string, unknown> }));
+  // The same payload the webhook route enqueues, the push reference included.
+  const deliverToOutbox = (s: Sql) => async (kind: 'stk' | 'result', body: unknown, pushRef?: string) => {
+    await s.begin((tx) => enqueueOutbox(tx, 'mpesa.callback',
+      { kind, body: body as Record<string, unknown>, ...(pushRef ? { ref: pushRef } : {}) }));
   };
   return {
     cfg,

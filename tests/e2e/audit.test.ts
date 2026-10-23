@@ -2,7 +2,7 @@
 // failed (or could not be written) before the fix and passes after.
 
 import { beforeAll, afterAll, describe, expect, test } from 'vitest';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import Fastify from 'fastify';
 import { redactUrl } from '@sidequest/observability';
 import { signAccess } from '@sidequest/api/plugins/auth';
@@ -83,6 +83,16 @@ describe('2, 6 · Daraja callbacks', () => {
     expect(await callbacks()).toBe(before);
     await post(`/webhooks/daraja/${token}/stk`);
     expect(await callbacks()).toBe(before + 1);
+    // The push's payment id rides on its callback URL; anything else there is dropped, not refused.
+    const id = randomUUID();
+    await post(`/webhooks/daraja/${token}/stk/${id}`);
+    await post(`/webhooks/daraja/${token}/stk/not-a-payment`);
+    expect(await callbacks()).toBe(before + 3);
+    const refs = await w.admin`SELECT payload->>'ref' AS ref FROM outbox_event
+                                WHERE queue = 'mpesa.callback'
+                                  AND payload->'body'->'Body'->'stkCallback'->>'CheckoutRequestID' = 'ws_CO_probe'
+                                ORDER BY id DESC LIMIT 2`;
+    expect(refs.map((r) => r.ref)).toEqual([null, id]);
     await app.close();
   });
 

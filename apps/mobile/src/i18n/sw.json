@@ -264,6 +264,7 @@
   "notify.settings": "Fungua Mipangilio",
   "live.map_runner": "{name} yuko umbali wa {distance}",
   "live.map_waiting": "Inasubiri mahali alipo {name}",
+  "live.map_unavailable": "Mahali alipo {name} hapapatikani kwa Qwest hii. Mtumie ujumbe kujua anaendeleaje.",
   "live.map_dropoff": "Mahali pa kupokea",
   "legal.consent_before": "Nina miaka 18 au zaidi na ninakubali ",
   "legal.terms": "Masharti ya Huduma",

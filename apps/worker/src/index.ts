@@ -9,6 +9,7 @@ import { buildWorkerDeps, startQueues } from './runtime.js';
 import { reconcile } from './jobs/reconcile.job.js';
 import { retention } from './jobs/retention.js';
 import { watchdog } from './jobs/safety.js';
+import { expireUnansweredPushes } from './jobs/payments.js';
 
 const cfg = config();
 assertMarketsConsistent();
@@ -37,8 +38,12 @@ const hourly = setInterval(() => {
     }));
   }
   void once(`retention:${now.toISOString().slice(0, 13)}`, 3600, () => retention(deps.sql, deps.storage));
-  // Every ten minutes: errands stuck in a live state go to Legal Operations (jobs/safety.ts).
-  void once(`watchdog:${now.toISOString().slice(0, 15)}`, 600, () => watchdog({ sql: deps.sql, alert: deps.alert }));
+  // Every ten minutes (the key is the ISO time to the tens of minutes, "2026-10-23T09:1"):
+  // errands stuck in a live state go to Legal Operations (jobs/safety.ts), and M-Pesa prompts
+  // nobody answered are closed (jobs/payments.ts).
+  const tenMinutes = now.toISOString().slice(0, 15);
+  void once(`watchdog:${tenMinutes}`, 600, () => watchdog({ sql: deps.sql, alert: deps.alert }));
+  void once(`pushes:${tenMinutes}`, 600, () => expireUnansweredPushes(deps));
 }, 60_000);
 
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {

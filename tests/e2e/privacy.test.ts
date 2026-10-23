@@ -84,6 +84,9 @@ describe('erasure: closing my account', () => {
     expect(acct.suspended_at).not.toBeNull();
     expect((await w.one`SELECT count(*)::int AS n FROM kyc_case WHERE account_id = ${me.id}`).n).toBe(0);
     expect(await disk.exists(key)).toBe(false);
+    // The durable deletion was committed with the erasure, not after it.
+    expect((await w.one`SELECT count(*)::int AS n FROM outbox_event
+                         WHERE queue = 'storage.delete' AND payload->'keys' ? ${key}`).n).toBe(1);
     expect((await w.one`SELECT kyc_objects FROM erasure_log WHERE account_id = ${me.id}`).kyc_objects).toBe(1);
     // Every session is gone: the refresh token no longer works.
     expect((await w.anon().post('/auth/refresh', { refresh: me.refresh }, { idem: false })).status).toBe(401);
@@ -133,6 +136,22 @@ describe('retention schedule', () => {
     expect(await disk.exists(approved)).toBe(true);
     expect((await w.one`SELECT count(*)::int AS n FROM kyc_case WHERE account_id = ${a.id}`).n).toBe(0);
     expect((await w.one`SELECT count(*)::int AS n FROM kyc_case WHERE account_id = ${b.id}`).n).toBe(1);
+  });
+
+  test('a document the bucket refuses to delete is still deleted later: its job commits with the purge', async () => {
+    const a = await w.requester();
+    const key = await storedKycDoc(a.id, 'rejected', 100);
+    const refusing = Object.assign(Object.create(disk), { delete: async () => { throw new Error('bucket unavailable'); } });
+
+    await retention(w.worker.sql, refusing);
+    // The row that named the document is gone and the bucket said no; the job still has the key.
+    expect((await w.one`SELECT count(*)::int AS n FROM kyc_case WHERE account_id = ${a.id}`).n).toBe(0);
+    expect(await disk.exists(key)).toBe(true);
+    expect((await w.one`SELECT count(*)::int AS n FROM outbox_event
+                         WHERE queue = 'storage.delete' AND dispatched_at IS NULL AND payload->'keys' ? ${key}`).n).toBe(1);
+
+    await w.settle({ ignoreDelay: true, only: ['storage.delete'] });
+    expect(await disk.exists(key)).toBe(false);
   });
 
   test('chat goes after a year, unless the errand is disputed', async () => {
