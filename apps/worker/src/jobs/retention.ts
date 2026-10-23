@@ -6,9 +6,41 @@
 //   - rejected/expired KYC 90 days after review, errand photos 2 years, chat 1 year, never while
 //     an errand is live or disputed (app_retention_purge, 0011); then their stored objects
 
-import type { Sql } from '@sidequest/db';
+import { enqueueOutbox, type Sql } from '@sidequest/db';
 import type { StoragePort } from '@sidequest/adapters';
 import { logger, metrics } from '@sidequest/observability';
+import type { Handler } from '../context.js';
+
+/**
+ * Delete stored objects, and hand any that failed to a durable retry. The rows that named
+ * them are already gone, so a failure that was only counted (as it used to be) left identity
+ * documents and photos in the bucket for good — the retention pass would never find them again.
+ */
+export async function deleteObjects(sql: Sql, storage: StoragePort, keys: readonly string[], reason: string): Promise<number> {
+  const failed: string[] = [];
+  for (const key of keys) {
+    try { await storage.delete(key); } catch { failed.push(key); }
+  }
+  if (failed.length) {
+    metrics.increment('storage.delete_deferred', { reason }, failed.length);
+    // Batches of 50 keep each outbox row small; each retries and, if it keeps failing, parks.
+    for (let i = 0; i < failed.length; i += 50) {
+      await sql.begin((tx) => enqueueOutbox(tx, 'storage.delete', { keys: failed.slice(i, i + 50), reason }, { delaySeconds: 60 }));
+    }
+  }
+  return failed.length;
+}
+
+/** The durable retry: throws while any key still fails, so the outbox retries and then parks. */
+export const storageDelete: Handler = async (payload, ctx) => {
+  const keys = Array.isArray(payload.keys) ? payload.keys.filter((k): k is string => typeof k === 'string') : [];
+  const reason = typeof payload.reason === 'string' ? payload.reason : 'retry';
+  const left: string[] = [];
+  for (const key of keys) {
+    try { await ctx.deps.storage.delete(key); } catch { left.push(key); }
+  }
+  if (left.length) throw new Error(`${left.length} of ${keys.length} stored objects still not deleted (${reason})`);
+};
 
 export async function retention(sql: Sql, storage: StoragePort) {
   const points = await sql`
@@ -18,10 +50,7 @@ export async function retention(sql: Sql, storage: StoragePort) {
     DELETE FROM outbox_event WHERE dispatched_at IS NOT NULL AND dispatched_at < now() - interval '14 days'`;
   const idem = await sql`DELETE FROM idempotency_key WHERE created_at < now() - interval '48 hours'`;
   const [purge] = await sql<{ keys: string[] }[]>`SELECT app_retention_purge() AS keys`;
-  let failed = 0;
-  for (const key of purge!.keys) {
-    try { await storage.delete(key); } catch { failed++; }
-  }
+  const failed = await deleteObjects(sql, storage, purge!.keys, 'retention');
   metrics.gauge('retention.points_nulled', points.count);
   logger[failed ? 'error' : 'info']({ points: points.count, outbox: outbox.count, idempotency: idem.count,
     objects: purge!.keys.length, objects_failed: failed }, 'retention pass');

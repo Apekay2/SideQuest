@@ -246,6 +246,47 @@ const OPERATIONAL: Assertion[] = [
     query: (sql) => sql`SELECT id FROM errand WHERE runner_id IS NOT NULL
                           AND NOT EXISTS (SELECT 1 FROM errand_fee f WHERE f.errand_id = errand.id) LIMIT 50`,
   },
+  // ── rail outcomes the worker could not confirm (production readiness audit). Each of these is
+  // money that may have moved at Safaricom while our side waits; none may wait unseen.
+  {
+    name: 'payout.unconfirmed',
+    severity: 'page',
+    detail: 'A runner payout or a withdrawal was sent to M-Pesa over two hours ago and has no result. Check it in the M-Pesa portal before anyone retries it.',
+    query: (sql) => sql`
+      (SELECT 'payout' AS kind, id, amount_cents, failure_code, created_at FROM payout
+        WHERE status = 'sent' AND created_at < now() - interval '2 hours' LIMIT 25)
+      UNION ALL
+      (SELECT 'withdrawal', id, amount_cents, failure_code, created_at FROM payment
+        WHERE direction = 'out' AND status = 'pending' AND created_at < now() - interval '2 hours' LIMIT 25)`,
+  },
+  {
+    name: 'payment.push_unresolved',
+    severity: 'ticket',
+    detail: 'An M-Pesa prompt is still pending an hour after it was sent. If the customer paid, their callback was not matched.',
+    query: (sql) => sql`SELECT id, account_id, amount_cents, failure_code, created_at FROM payment
+                         WHERE direction = 'in' AND status IN ('initiated','pending')
+                           AND created_at < now() - interval '1 hour' LIMIT 50`,
+  },
+  {
+    name: 'mpesa.receipt_unmatched',
+    severity: 'page',
+    detail: 'A successful M-Pesa payment reached us that matches no payment we started. A customer has paid and has not been credited.',
+    query: (sql) => sql`SELECT m.id, m.checkout_ref, m.amount_cents, m.received_at FROM mpesa_event m
+                         WHERE m.direction = 'in' AND m.result_code = '0' AND m.received_at > now() - interval '7 days'
+                           -- A real success always carries Safaricom's receipt number; a body
+                           -- without one is a forgery the source gate let through, logged apart.
+                           AND jsonb_path_exists(m.raw, '$.Body.stkCallback.CallbackMetadata.Item[*] ? (@.Name == "MpesaReceiptNumber")')
+                           AND NOT EXISTS (SELECT 1 FROM payment p WHERE p.provider = 'daraja' AND p.provider_ref = m.checkout_ref)
+                         LIMIT 50`,
+  },
+  {
+    name: 'sos.unacknowledged',
+    severity: 'page',
+    detail: 'An SOS has gone over fifteen minutes without anyone acknowledging it in the console.',
+    query: (sql) => sql`SELECT id, errand_id, created_at, escalations FROM sos_case
+                         WHERE acknowledged_at IS NULL AND resolved_at IS NULL
+                           AND created_at < now() - interval '15 minutes' LIMIT 50`,
+  },
   {
     name: 'currency.market_consistency',
     severity: 'page',

@@ -10,7 +10,9 @@ import {
 import { paymentStk, mpesaCallback, payoutSend, paymentWithdraw, issuerEvent } from './jobs/payments.js';
 import { checkpointRecord, etaRecompute } from './jobs/progress.js';
 import { notify } from './jobs/notify.js';
-import { offerExpire, evidenceReject, linkRevoke, errandPublished, sosOpened } from './jobs/lifecycle.js';
+import { offerExpire, evidenceReject, linkRevoke, errandPublished } from './jobs/lifecycle.js';
+import { sosOpened, sosEscalate, errandWatchdog } from './jobs/safety.js';
+import { storageDelete } from './jobs/retention.js';
 
 export const HANDLERS: Readonly<Record<string, Handler>> = Object.freeze({
   // money
@@ -38,4 +40,8 @@ export const HANDLERS: Readonly<Record<string, Handler>> = Object.freeze({
   'link.revoke': linkRevoke,
   'errand.published': errandPublished,
   'sos.opened': sosOpened,
+  // safety (production readiness audit)
+  'sos.escalate': sosEscalate,
+  'errand.watchdog': errandWatchdog,
+  'storage.delete': storageDelete,
 });

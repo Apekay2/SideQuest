@@ -11,6 +11,7 @@ import type { MpesaPort } from '@sidequest/domain/rails/mpesa.port';
 import type { SmsPort, PushPort, StoragePort } from '@sidequest/adapters';
 import { ledgerBalance, enqueueOutbox } from '@sidequest/db';
 import type { Logger } from '@sidequest/observability';
+import type { Alerter } from './alert.js';
 
 export interface WorkerDeps {
   cfg: Config;
@@ -22,6 +23,8 @@ export interface WorkerDeps {
   push: PushPort;
   /** Deletes stored objects the retention schedule has expired. */
   storage: StoragePort;
+  /** Puts a problem in front of a person (alert.ts). */
+  alert: Alerter;
 }
 
 export interface JobContext {
