@@ -282,7 +282,7 @@ describe('the watchdog hands a stuck errand to Legal Operations', () => {
     const req = await w.requester('Absent Abby');
     const run = await w.runner('Waiting Walter');
     const e = await atHandover(req, run);
-    await w.admin`UPDATE errand SET updated_at = now() - interval '25 hours' WHERE id = ${e.id}`;
+    await w.admin`UPDATE errand SET updated_at = now() - interval '25 hours', deadline_at = now() - interval '26 hours' WHERE id = ${e.id}`;
     const alerts: Alert[] = [];
     const raised = await watchdog({ sql: w.worker.sql, alert: async (a) => { alerts.push(a); } });
     expect(raised).toContain(e.id);
@@ -295,6 +295,14 @@ describe('the watchdog hands a stuck errand to Legal Operations', () => {
     expect(detail.body.status).toBe('disputed');
     expect(detail.body.escrow.frozen).toBe(true);
     // A second pass does not open a second dispute.
+    expect(await watchdog({ sql: w.worker.sql, alert: async () => {} })).not.toContain(e.id);
+  });
+
+  test('an errand scheduled for later is not stuck while it waits for its deadline', async () => {
+    const req = await w.requester('Planner Petra');
+    const run = await w.runner('Booked Ben');
+    const e = await atHandover(req, run);
+    await w.admin`UPDATE errand SET updated_at = now() - interval '25 hours', deadline_at = now() + interval '2 days' WHERE id = ${e.id}`;
     expect(await watchdog({ sql: w.worker.sql, alert: async () => {} })).not.toContain(e.id);
   });
 

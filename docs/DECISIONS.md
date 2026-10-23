@@ -123,8 +123,9 @@ it. This is the next feature after this PR and comes before any errand-for-famil
 **Decision.** There is no "30-minute auto-release". The runner is paid when the handover is
 proven by the QR scan, or by the code in FD-07. An errand that cannot finish goes to a person
 instead. The watchdog opens a system dispute when an errand has sat 24 hours in `handover`,
-or 12 hours in `awarded`, `en_route`, `shopping` or `awaiting_approval`. The dispute freezes
-escrow and voids the card, and Legal Operations rules.
+or 12 hours in `awarded`, `en_route`, `shopping` or `awaiting_approval`. For an errand with a
+deadline, the clock starts at the deadline, so a job booked for Friday isn't "stuck" on
+Tuesday. The dispute freezes escrow and voids the card, and Legal Operations rules.
 
 **Why.** Before this, nothing released money held by a requester who never produced the QR,
 or by a runner who disappeared mid-run. A timer that pays out without proof would turn every

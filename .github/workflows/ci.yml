@@ -239,6 +239,22 @@ jobs:
       - uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: sidequest/${{ matrix.name }}:${{ github.sha }}
-          severity: CRITICAL
-          exit-code: '1'
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
+          format: json
+          output: trivy-${{ matrix.name }}.json
+          exit-code: '0'
+      # Critical blocks, high is reported; each finding is an annotation naming the package, the
+      # installed and fixed versions, so the PR says exactly what to upgrade.
+      - name: image vulnerabilities (critical blocks)
+        run: |
+          node -e '
+            const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+            let critical = 0;
+            for (const res of r.Results ?? []) for (const v of res.Vulnerabilities ?? []) {
+              if (v.Severity === "CRITICAL") critical++;
+              const level = v.Severity === "CRITICAL" ? "error" : "warning";
+              console.log(`::${level} title=${v.Severity}: ${v.PkgName} (${res.Target})::${v.VulnerabilityID} installed ${v.InstalledVersion}, fixed in ${v.FixedVersion}. ${(v.Title ?? "").slice(0, 120)}`);
+            }
+            process.exit(critical > 0 ? 1 : 0);
+          ' trivy-${{ matrix.name }}.json

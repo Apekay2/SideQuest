@@ -94,15 +94,19 @@ export async function watchdog(deps: WatchdogDeps, limit = 50): Promise<string[]
   const raised: string[] = [];
   for (const status of STUCK_STATES) {
     const hours = STUCK_AFTER_HOURS[status]!;
+    // An errand scheduled for later (a queue to stand in on Friday) is not stuck while it
+    // waits for its day: when it has a deadline, the clock starts there instead.
     const ids = await deps.sql<{ id: string }[]>`
       SELECT id FROM errand
        WHERE status = ${status} AND updated_at < now() - make_interval(hours => ${hours})
+         AND (deadline_at IS NULL OR deadline_at < now() - make_interval(hours => ${hours}))
        ORDER BY updated_at LIMIT ${limit}`;
     for (const { id } of ids) {
       const done = await deps.sql.begin(async (tx) => {
         const [e] = await tx<{ id: string; status: ErrandStatus; requester_id: string; runner_id: string | null; stuck: boolean }[]>`
           SELECT id, status, requester_id, runner_id,
-                 updated_at < now() - make_interval(hours => ${hours}) AS stuck
+                 (updated_at < now() - make_interval(hours => ${hours})
+                  AND (deadline_at IS NULL OR deadline_at < now() - make_interval(hours => ${hours}))) AS stuck
             FROM errand WHERE id = ${id} FOR UPDATE SKIP LOCKED`;
         if (!e || e.status !== status || !e.stuck) return null;
         const open = await tx`SELECT 1 FROM dispute WHERE errand_id = ${id} AND status IN ('open','evidence')`;
