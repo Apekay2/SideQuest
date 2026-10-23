@@ -147,13 +147,22 @@ jobs:
       # also proves infra/postgres builds.
       - name: postgres 16 + postgis + h3
         run: |
-          docker build -t sidequest/postgres infra/postgres
+          # The build's own output becomes an annotation on failure: annotations are readable
+          # from the PR (and the API), job logs are not always at hand.
+          if ! docker build --progress=plain -t sidequest/postgres infra/postgres > /tmp/pg-build.log 2>&1; then
+            tail -n 40 /tmp/pg-build.log
+            echo "::error title=postgres image build failed::$(tail -n 15 /tmp/pg-build.log | tr '\n' ' ' | cut -c1-3000)"
+            exit 1
+          fi
           docker run -d --name pg -p 5432:5432 -e POSTGRES_PASSWORD=ci sidequest/postgres
           # Wait on TCP, not the socket: during first-boot init the image runs a temporary
           # server on the Unix socket only, then restarts. A socket check passes against that
           # temporary server and the migration's TCP connection lands in the restart.
           for i in $(seq 1 90); do docker exec pg pg_isready -h 127.0.0.1 -U postgres -q && break; sleep 1; done
-          docker exec pg pg_isready -h 127.0.0.1 -U postgres
+          if ! docker exec pg pg_isready -h 127.0.0.1 -U postgres; then
+            echo "::error title=postgres did not start::$(docker logs pg 2>&1 | tail -n 15 | tr '\n' ' ' | cut -c1-3000)"
+            exit 1
+          fi
           docker exec pg psql -h 127.0.0.1 -U postgres -c 'CREATE DATABASE sq_shadow'
       - name: forward migrate
         run: pnpm migrate:up
