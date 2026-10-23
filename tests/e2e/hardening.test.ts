@@ -127,13 +127,18 @@ describe('a rail timeout is not a refusal', () => {
     expect((await run.client.get('/earnings')).body.available_cents).toBe(before);
   });
 
-  /** An STK callback as the webhook route enqueues it: `ref` is the payment id from its URL. */
-  const stkCallback = (checkoutRef: string, shillings: number, receipt: string, ref?: string) =>
+  /**
+   * An STK callback as the webhook route enqueues it: `ref` is the payment id from its URL. With
+   * no receipt number it is not a genuine success to reconciliation, which this file shares a
+   * database with: an unmatched one would (rightly) page in every later "no findings" check.
+   */
+  const stkCallback = (checkoutRef: string, shillings: number, receipt: string | null, ref?: string) =>
     w.admin`INSERT INTO outbox_event (queue, payload) VALUES ('mpesa.callback', ${w.admin.json({
       kind: 'stk', ...(ref ? { ref } : {}), body: { Body: { stkCallback: {
         MerchantRequestID: 'm1', CheckoutRequestID: checkoutRef, ResultCode: 0, ResultDesc: 'ok',
         CallbackMetadata: { Item: [
-          { Name: 'Amount', Value: shillings }, { Name: 'MpesaReceiptNumber', Value: receipt },
+          { Name: 'Amount', Value: shillings },
+          ...(receipt ? [{ Name: 'MpesaReceiptNumber', Value: receipt }] : []),
           // Safaricom masks the payer; nothing may depend on this.
           { Name: 'PhoneNumber', Value: '0722***111' },
         ] },
@@ -160,7 +165,7 @@ describe('a rail timeout is not a refusal', () => {
     const u = await w.requester('Unmatched Una');
     const r = await u.client.post('/wallet/topup', { amount_cents: 20_000 });
     await pushTimesOut();
-    await stkCallback('ws_CO_no_ref', 200, 'NOREF1');
+    await stkCallback('ws_CO_no_ref', 200, null);
     await w.settle();
     expect((await u.client.get('/wallet')).body.balance_cents).toBe(0);
     const [p] = await w.admin`SELECT status, provider_ref FROM payment WHERE id = ${r.body.payment_id}`;
