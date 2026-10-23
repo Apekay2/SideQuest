@@ -156,4 +156,17 @@ export async function enqueueOutbox(tx: Tx, queue: string, payload: Record<strin
             ${opts.actorId ?? null})`;
 }
 
+/**
+ * Record stored objects for deletion in the caller's transaction — the one deleting the rows
+ * that name them. Once those rows are gone nothing will ever find the keys again, so the
+ * record has to commit with the deletion, not after it. The worker's `storage.delete` job
+ * deletes them, retrying and then parking for a person; deleting an object that is already
+ * gone succeeds, so the caller may also delete them at once. Batches keep each row small.
+ */
+export async function enqueueStorageDeletes(tx: Tx, keys: readonly string[], reason: string, delaySeconds = 60): Promise<void> {
+  for (let i = 0; i < keys.length; i += 50) {
+    await enqueueOutbox(tx, 'storage.delete', { keys: keys.slice(i, i + 50), reason }, { delaySeconds });
+  }
+}
+
 export { postgres };

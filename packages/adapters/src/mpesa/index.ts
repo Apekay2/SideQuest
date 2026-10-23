@@ -35,9 +35,8 @@ export function parseCallback(kind: 'stk' | 'result', body: unknown): MpesaResul
       resultDesc: String(cb.ResultDesc ?? ''),
       amountCents: typeof amount === 'number' ? Math.round(amount * 100) : null,
       receipt: typeof get('MpesaReceiptNumber') === 'string' ? String(get('MpesaReceiptNumber')) : null,
-      // Used only to match a callback whose push request timed out before we learned its
-      // CheckoutRequestID (payments.ts onStk). Safaricom sends it as a number.
-      msisdn: get('PhoneNumber') !== undefined ? String(get('PhoneNumber')).replace(/\D/g, '') : null,
+      // PhoneNumber is not read: Safaricom masks payer numbers, and the push is matched by its
+      // CheckoutRequestID or by the payment id on the callback URL (payments.ts onStk).
     };
   }
   const r = (body as { Result?: Record<string, unknown> }).Result;
@@ -62,7 +61,8 @@ export function parseCallback(kind: 'stk' | 'result', body: unknown): MpesaResul
 
 // ─────────────────────────────────────────────── fake
 
-export type Deliver = (kind: 'stk' | 'result', body: unknown) => Promise<void>;
+/** `pushRef`: for an STK callback, the payment id the real driver puts on the callback URL. */
+export type Deliver = (kind: 'stk' | 'result', body: unknown, pushRef?: string) => Promise<void>;
 
 /**
  * Development and test driver. Every call succeeds, except these deterministic failures so
@@ -74,9 +74,9 @@ export type Deliver = (kind: 'stk' | 'result', body: unknown) => Promise<void>;
 export class FakeMpesa implements MpesaPort {
   constructor(private readonly deliver: Deliver, private readonly delayMs = 800) {}
 
-  private later(kind: 'stk' | 'result', body: unknown) {
+  private later(kind: 'stk' | 'result', body: unknown, pushRef?: string) {
     setTimeout(() => {
-      this.deliver(kind, body).catch((err) => logger.error({ err }, 'fake mpesa delivery failed'));
+      this.deliver(kind, body, pushRef).catch((err) => logger.error({ err }, 'fake mpesa delivery failed'));
     }, this.delayMs).unref?.();
   }
 
@@ -89,13 +89,13 @@ export class FakeMpesa implements MpesaPort {
         MerchantRequestID: randomUUID(), CheckoutRequestID: checkoutRef,
         ResultCode: cancelled ? 1032 : 0,
         ResultDesc: cancelled ? 'Request cancelled by user' : 'The service request is processed successfully.',
+        // No PhoneNumber: Safaricom masks it, so nothing may depend on it.
         ...(cancelled ? {} : { CallbackMetadata: { Item: [
           { Name: 'Amount', Value: shillings },
           { Name: 'MpesaReceiptNumber', Value: `FAKE${Date.now().toString(36).toUpperCase()}` },
-          { Name: 'PhoneNumber', Value: Number(args.msisdn.replace('+', '')) },
         ] } }),
       } },
-    });
+    }, args.idemKey);
     return { checkoutRef };
   }
 
@@ -221,7 +221,9 @@ export class Daraja implements MpesaPort {
       PartyA: phone,
       PartyB: this.cfg.shortcode,
       PhoneNumber: phone,
-      CallBackURL: `${this.cfg.callbackBase}/webhooks/daraja/${this.cfg.callbackToken}/stk`,
+      // The payment id rides on the URL so that a callback can be matched even when this
+      // request timed out and its CheckoutRequestID never reached us (see MpesaPort.stkPush).
+      CallBackURL: `${this.cfg.callbackBase}/webhooks/daraja/${this.cfg.callbackToken}/stk/${encodeURIComponent(args.idemKey)}`,
       AccountReference: args.accountRef.slice(0, 12),
       TransactionDesc: args.description.slice(0, 13),
     });

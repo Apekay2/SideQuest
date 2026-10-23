@@ -262,10 +262,12 @@ const OPERATIONAL: Assertion[] = [
   {
     name: 'payment.push_unresolved',
     severity: 'ticket',
-    detail: 'An M-Pesa prompt is still pending an hour after it was sent. If the customer paid, their callback was not matched.',
+    // expireUnansweredPushes closes these about 70 minutes in, so one still open at three hours
+    // means that job is not running.
+    detail: 'An M-Pesa prompt is still pending three hours after it was sent: the job that expires unanswered prompts is not running.',
     query: (sql) => sql`SELECT id, account_id, amount_cents, failure_code, created_at FROM payment
                          WHERE direction = 'in' AND status IN ('initiated','pending')
-                           AND created_at < now() - interval '1 hour' LIMIT 50`,
+                           AND created_at < now() - interval '3 hours' LIMIT 50`,
   },
   {
     name: 'mpesa.receipt_unmatched',

@@ -5,12 +5,13 @@ import { beforeAll, afterAll, describe, expect, test } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { NoCardIssuer, type ConsoleSms } from '@sidequest/adapters';
 import { insertPostingGroup } from '@sidequest/db';
-import { withdraw } from '@sidequest/domain/ledger/posting';
+import { topUp, withdraw } from '@sidequest/domain/ledger/posting';
 import { cents } from '@sidequest/domain/money/money';
 import { MpesaRejectedError, MpesaUnknownOutcomeError, type MpesaPort } from '@sidequest/domain/rails/mpesa.port';
 import { buildWorkerDeps, drain } from '@sidequest/worker/runtime';
 import { watchdog, SOS_MAX_PAGES } from '@sidequest/worker/jobs/safety';
 import { unknownRetryDelaySeconds } from '@sidequest/worker/jobs/card-load.job';
+import { expireUnansweredPushes } from '@sidequest/worker/jobs/payments';
 import type { Alert } from '@sidequest/worker/alert';
 import { World, marketRun, NAIROBI, type User } from './world.js';
 
@@ -126,27 +127,94 @@ describe('a rail timeout is not a refusal', () => {
     expect((await run.client.get('/earnings')).body.available_cents).toBe(before);
   });
 
-  test('a top-up whose push timed out is credited when its callback arrives, matched by payer and amount', async () => {
+  /**
+   * An STK callback as the webhook route enqueues it: `ref` is the payment id from its URL. With
+   * no receipt number it is not a genuine success to reconciliation, which this file shares a
+   * database with: an unmatched one would (rightly) page in every later "no findings" check.
+   */
+  const stkCallback = (checkoutRef: string, shillings: number, receipt: string | null, ref?: string) =>
+    w.admin`INSERT INTO outbox_event (queue, payload) VALUES ('mpesa.callback', ${w.admin.json({
+      kind: 'stk', ...(ref ? { ref } : {}), body: { Body: { stkCallback: {
+        MerchantRequestID: 'm1', CheckoutRequestID: checkoutRef, ResultCode: 0, ResultDesc: 'ok',
+        CallbackMetadata: { Item: [
+          { Name: 'Amount', Value: shillings },
+          ...(receipt ? [{ Name: 'MpesaReceiptNumber', Value: receipt }] : []),
+          // Safaricom masks the payer; nothing may depend on this.
+          { Name: 'PhoneNumber', Value: '0722***111' },
+        ] },
+      } } },
+    })})`;
+  const pushTimesOut = () => drain(workerWith({ mpesa: rail(() => new MpesaUnknownOutcomeError('timeout')) }), { only: ['payment.stk'] });
+
+  test('a top-up whose push timed out is credited when its callback arrives, matched by the id on its URL', async () => {
     const u = await w.requester('Paid Anyway Pam');
     const r = await u.client.post('/wallet/topup', { amount_cents: 50_000 });
-    await drain(workerWith({ mpesa: rail(() => new MpesaUnknownOutcomeError('timeout')) }), { only: ['payment.stk'] });
+    await pushTimesOut();
     const [p] = await w.admin`SELECT status, failure_code, provider_ref FROM payment WHERE id = ${r.body.payment_id}`;
     // It used to be marked failed: a customer who then paid was never credited.
     expect(p).toMatchObject({ status: 'pending', failure_code: 'push_unconfirmed', provider_ref: null });
 
-    await w.admin`INSERT INTO outbox_event (queue, payload) VALUES ('mpesa.callback', ${w.admin.json({
-      kind: 'stk', body: { Body: { stkCallback: {
-        MerchantRequestID: 'm1', CheckoutRequestID: 'ws_CO_never_seen', ResultCode: 0, ResultDesc: 'ok',
-        CallbackMetadata: { Item: [
-          { Name: 'Amount', Value: 500 }, { Name: 'MpesaReceiptNumber', Value: 'LATE2' },
-          { Name: 'PhoneNumber', Value: Number(u.msisdn.replace('+', '')) },
-        ] },
-      } } },
-    })})`;
+    await stkCallback('ws_CO_never_seen', 500, 'LATE2', r.body.payment_id);
     await w.settle();
     expect((await u.client.get('/wallet')).body.balance_cents).toBe(50_000);
     const [done] = await w.admin`SELECT status, provider_ref FROM payment WHERE id = ${r.body.payment_id}`;
     expect(done).toMatchObject({ status: 'confirmed', provider_ref: 'ws_CO_never_seen' });
+  });
+
+  test('without the id a timed-out push is not guessed at, whoever the masked payer looks like', async () => {
+    const u = await w.requester('Unmatched Una');
+    const r = await u.client.post('/wallet/topup', { amount_cents: 20_000 });
+    await pushTimesOut();
+    await stkCallback('ws_CO_no_ref', 200, null);
+    await w.settle();
+    expect((await u.client.get('/wallet')).body.balance_cents).toBe(0);
+    const [p] = await w.admin`SELECT status, provider_ref FROM payment WHERE id = ${r.body.payment_id}`;
+    expect(p).toMatchObject({ status: 'pending', provider_ref: null });   // reconciliation's to find
+  });
+
+  test('a prompt nobody answers is expired an hour past its expiry, and a late success is still credited', async () => {
+    const u = await w.requester('Silent Sam');
+    const r = await u.client.post('/wallet/topup', { amount_cents: 30_000 });
+    await pushTimesOut();
+    await w.admin`UPDATE payment SET created_at = now() - interval '3 hours', expires_at = now() - interval '2 hours'
+                   WHERE id = ${r.body.payment_id}`;
+    expect(await expireUnansweredPushes(w.worker)).toBeGreaterThanOrEqual(1);
+    const [p] = await w.admin`SELECT status FROM payment WHERE id = ${r.body.payment_id}`;
+    expect(p!.status).toBe('expired');
+    // Expired is not a dead end: if the customer did pay, the money is theirs.
+    await stkCallback('ws_CO_after_expiry', 300, 'LATE3', r.body.payment_id);
+    await w.settle();
+    expect((await u.client.get('/wallet')).body.balance_cents).toBe(30_000);
+  });
+
+  test('a fresh prompt is left alone', async () => {
+    const u = await w.requester('Patient Pat');
+    const r = await u.client.post('/wallet/topup', { amount_cents: 10_000 });
+    await pushTimesOut();
+    await expireUnansweredPushes(w.worker);
+    const [p] = await w.admin`SELECT status FROM payment WHERE id = ${r.body.payment_id}`;
+    expect(p!.status).toBe('pending');
+  });
+
+  test('after expiry a late failure changes nothing, and the account cannot be erased for a day', async () => {
+    const u = await w.requester('Late Lou');
+    const r = await u.client.post('/wallet/topup', { amount_cents: 40_000 });
+    await pushTimesOut();
+    await w.admin`UPDATE payment SET expires_at = now() - interval '2 hours' WHERE id = ${r.body.payment_id}`;
+    await expireUnansweredPushes(w.worker);
+    // A late cancel: the customer has already been told this push failed.
+    await w.admin`INSERT INTO outbox_event (queue, payload) VALUES ('mpesa.callback', ${w.admin.json({
+      kind: 'stk', ref: r.body.payment_id, body: { Body: { stkCallback: {
+        MerchantRequestID: 'm1', CheckoutRequestID: 'ws_CO_late_cancel', ResultCode: 1032, ResultDesc: 'Request cancelled by user',
+      } } },
+    })})`;
+    await w.settle();
+    const [p] = await w.admin`SELECT status FROM payment WHERE id = ${r.body.payment_id}`;
+    expect(p!.status).toBe('expired');
+    // A late success would still be credited to the wallet, so erasure waits.
+    const del = await u.client.post('/me/delete', { confirm: 'DELETE' });
+    expect(del.status).toBe(409);
+    expect(del.body.code).toBe('ACCOUNT_HAS_BALANCE');
   });
 
   test('an interrupted issuer load is re-asked less and less often, never every 5 s for ever', () => {
@@ -197,6 +265,40 @@ describe('client money cannot go negative', () => {
       insertPostingGroup(tx, withdraw({ userId: u.id, amountCents: cents(100), currency: 'KES' }))).catch((e) => e);
     expect(err?.code).toBe('23514');
     expect(String(err?.message)).toMatch(/client money would go negative/);
+  });
+
+  test('two debits that each fit, committing at the same moment, cannot both overdraw it', async () => {
+    const u = await w.requester('Racing Rita');
+    await w.worker.sql.begin((tx) => insertPostingGroup(tx, topUp({ userId: u.id, amountCents: cents(10_000), currency: 'KES' })));
+    // Hold the wallet's lock so both debits reach their commit-time check together. Without the
+    // check's own lock they would not wait for it: each would sum a ledger without the other,
+    // and both would commit.
+    let release!: () => void;
+    const held = new Promise<void>((r) => { release = r; });
+    let locked!: () => void;
+    const isLocked = new Promise<void>((r) => { locked = r; });
+    const holder = w.admin.begin(async (tx) => {
+      await tx`SELECT pg_advisory_xact_lock(hashtext(${'wallet:' + u.id}))`;
+      locked();
+      await held;
+    });
+    await isLocked;
+    const debit = () => w.worker.sql.begin((tx) =>
+      insertPostingGroup(tx, withdraw({ userId: u.id, amountCents: cents(6_000), currency: 'KES' })));
+    const both = Promise.allSettled([debit(), debit()]);
+    for (let i = 0; i < 100; i++) {
+      const [q] = await w.admin`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND NOT granted`;
+      if (q!.n >= 2) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    release();
+    await holder;
+    const out = await both;
+    expect(out.filter((o) => o.status === 'fulfilled')).toHaveLength(1);
+    expect((out.find((o) => o.status === 'rejected') as PromiseRejectedResult).reason?.code).toBe('23514');
+    const [b] = await w.admin`SELECT COALESCE(sum(amount_cents), 0)::int AS n FROM posting
+                              WHERE account = 'user_wallet' AND owner_id = ${u.id}`;
+    expect(b!.n).toBe(4_000);
   });
 });
 

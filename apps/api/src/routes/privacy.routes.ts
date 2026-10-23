@@ -10,7 +10,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import { DeleteAccount, LocationConsentBody, type LocationConsent } from '@sidequest/contracts';
-import { ledgerBalance, enqueueOutbox, type Tx } from '@sidequest/db';
+import { ledgerBalance, enqueueStorageDeletes, type Tx } from '@sidequest/db';
 import { logger } from '@sidequest/observability';
 import { AppError } from '../plugins/errors.js';
 import { LIMITS } from '../plugins/rate-limit.js';
@@ -19,8 +19,11 @@ import { parse } from '../lib/validate.js';
 async function owed(tx: Tx, me: string) {
   const wallet = await ledgerBalance(tx, { account: 'user_wallet', ownerId: me });
   const earnings = await ledgerBalance(tx, { account: 'runner_earnings', ownerId: me });
+  // An expired M-Pesa prompt still counts for a day: a late success is credited to the wallet
+  // (payments.ts onStk), and an erased account's wallet is money nobody can withdraw.
   const [p] = await tx<{ n: number }[]>`
-    SELECT count(*)::int AS n FROM payment WHERE account_id = ${me} AND status IN ('initiated', 'pending')`;
+    SELECT count(*)::int AS n FROM payment WHERE account_id = ${me}
+       AND (status IN ('initiated', 'pending') OR (status = 'expired' AND created_at > now() - interval '24 hours'))`;
   const [q] = await tx<{ n: number }[]>`
     SELECT count(*)::int AS n FROM payout WHERE runner_id = ${me} AND status IN ('queued', 'sent')`;
   return { wallet_cents: Number(wallet), earnings_cents: Number(earnings), payments_in_flight: p!.n + q!.n };
@@ -72,31 +75,31 @@ export default async function privacyRoutes(app: FastifyInstance) {
       if (o.wallet_cents !== 0 || o.earnings_cents !== 0 || o.payments_in_flight > 0) {
         throw new AppError(409, 'ACCOUNT_HAS_BALANCE', 'Withdraw your balance before closing your account', o);
       }
+      let erased: string[];
       try {
         const [r] = await tx<{ keys: string[] }[]>`SELECT app_erase_self() AS keys`;
-        return r!.keys;
+        erased = r!.keys;
       } catch (e) {
         const hint = (e as { hint?: string }).hint;
         if (hint === 'LIVE_ERRANDS') throw new AppError(409, 'LIVE_ERRANDS', 'Finish or cancel your errands in progress first');
         if (hint === 'OPEN_DISPUTE') throw new AppError(409, 'OPEN_DISPUTE', 'A dispute on one of your errands is still open');
         throw e;
       }
+      // Committed with the erasure: these rows were the only record of the person's documents,
+      // and a delete that failed used to be logged and forgotten, leaving their ID photos in the
+      // bucket after they had been told their account was erased. The worker's job deletes them
+      // whatever happens below, retrying and then parking for a person.
+      await enqueueStorageDeletes(tx, erased, 'erasure');
+      return erased;
     });
-    // The rows are gone; now the documents. Nothing will ever find these keys again, so a
-    // delete that fails is handed to the worker's durable retry ('storage.delete', which
-    // retries and then parks for a person) — it used to be logged and forgotten, leaving the
-    // person's ID photos in the bucket after they had been told their account was erased.
-    const failed: string[] = [];
+    // Delete at once as well, so the documents are normally gone by the time we answer. A
+    // failure here is already covered by the job, and must not turn a completed erasure into
+    // an error response.
+    let failed = 0;
     for (const key of keys) {
-      try { await storage.delete(key); } catch { failed.push(key); }
+      try { await storage.delete(key); } catch { failed += 1; }
     }
-    if (failed.length) {
-      logger.error({ account: me, failed: failed.length }, 'erasure: stored documents deferred to the worker');
-      for (let i = 0; i < failed.length; i += 50) {
-        await app.tx(req, (tx) => enqueueOutbox(tx, 'storage.delete',
-          { keys: failed.slice(i, i + 50), reason: 'erasure' }, { delaySeconds: 30 }));
-      }
-    }
+    if (failed) logger.warn({ account: me, failed }, 'erasure: stored documents left to the worker');
     return reply.code(204).send();
   });
 
