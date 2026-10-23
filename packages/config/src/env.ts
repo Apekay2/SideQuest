@@ -274,7 +274,11 @@ let cached: Config | null = null;
 
 /** Parse and validate an environment. Pure: tests call it with a fabricated env. */
 export function loadConfig(env: Record<string, string | undefined>): Config {
-  const parsed = Env.safeParse(env);
+  // A blank line in an env file (`ALERT_WEBHOOK_URL=`) means "not set", as dotenv tools treat
+  // it. Parsed as an empty string it failed every optional URL or regex field, so a copy of
+  // .env.example could not boot even with every required value filled in.
+  const present = Object.fromEntries(Object.entries(env).filter(([, v]) => v !== undefined && v.trim() !== ''));
+  const parsed = Env.safeParse(present);
   if (!parsed.success) {
     const lines = parsed.error.issues.map((i) => `  ${i.path.join('.') || '(config)'}: ${i.message}`);
     throw new Error(`Invalid environment:\n${lines.join('\n')}`);

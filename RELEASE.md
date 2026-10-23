@@ -35,7 +35,13 @@ h3 is not offered by every managed Postgres. Check before choosing, or run `infr
    `X-Forwarded-For`. Get it right: rate limits and the Daraja source check depend on it.
 3. `OPS_IP_ALLOWLIST` is the console server's egress address; the console calls `/ops` server to
    server.
-4. `DARAJA_CALLBACK_BASE` is the API's public origin. `DARAJA_CALLBACK_TOKEN` is a fresh secret
+4. `SAFETY_ONCALL_MSISDNS`: the numbers paged on every SOS until someone acknowledges it
+   (production refuses to boot without one). `ALERT_WEBHOOK_URL`: your on-call tool's
+   incoming webhook, which receives SOS, reconciliation, parked-job and stuck-errand alerts.
+5. `ISSUER_DRIVER=none` until a card partner's adapter ships: stalls are paid by till, then
+   by approved cash (docs/DECISIONS.md FD-04). Ask Safaricom to enable B2B BuyGoods on the
+   paybill at go-live.
+6. `DARAJA_CALLBACK_BASE` is the API's public origin. `DARAJA_CALLBACK_TOKEN` is a fresh secret
    (callback URLs carry it). `DARAJA_SOURCE_CIDRS` is Safaricom's published callback ranges.
 
 ## 3. Deploy the backend
@@ -196,3 +202,8 @@ The rest needs the business and a Kenyan advocate. This is a checklist, not lega
 - [ ] Review-login variables unset after store approval
 - [ ] Performance targets measured on real devices (not yet measured; see README)
 - [ ] Every item in §6 done: ODPC registration, payments authorisation, published and reviewed Terms and Privacy Notice
+- [ ] SOS drill: raise an SOS from a test phone and confirm every on-call number is paged within a minute, and paged again until acknowledged
+- [ ] `ALERT_WEBHOOK_URL` receives a test alert; failed CI runs also notify someone
+- [ ] Branch protection on the release branch (CI required); Dependabot alerts on
+- [ ] The Vercel site's `/api/kyc` switched off and its stored ID numbers reviewed and deleted (docs/DECISIONS.md FD-15)
+- [ ] A penetration test against the staging environment

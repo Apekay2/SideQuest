@@ -164,6 +164,20 @@ Checked and found sound:
 - a withdrawal racing an errand funding (the worker re-checks under the same lock)
 - token storage on device (keychain, this device only; memory only on web)
 
+### Production-readiness audit (23 October 2026)
+
+A second pass fixed 30 findings, from two critical RCEs in the console's Next.js and a worker
+that silently used the mock card issuer, to payouts reversed on a timeout (paying twice),
+unbounded retry loops, an SOS that paged nobody, and errands that could hold escrow for ever.
+It also took the decisions those gaps forced. Read, in order:
+
+- [docs/AUDIT-2026-10-23.md](docs/AUDIT-2026-10-23.md): every finding, its fix and its test
+  (`tests/e2e/hardening.test.ts`)
+- [docs/DECISIONS.md](docs/DECISIONS.md): the founder decision log (market, payments partner,
+  till-first without a card partner, fee, insurance, handover, disputes, SOS, KYC)
+- [docs/PLATFORM.md](docs/PLATFORM.md): what the platform is, as built. It replaces the
+  earlier "complete platform" document, which described a different system.
+
 ## Legal compliance
 
 What the law and the app stores require of the software is built in. The full list, and what

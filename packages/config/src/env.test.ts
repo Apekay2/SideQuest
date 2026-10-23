@@ -110,3 +110,15 @@ describe('placeholder detection', () => {
     expect(refused).toEqual([]);
   });
 });
+
+describe('blank values', () => {
+  test('a blank optional line means unset, not an invalid value', () => {
+    expect(() => loadConfig({
+      ...prodEnv(), ALERT_WEBHOOK_URL: '', OTEL_EXPORTER_OTLP_ENDPOINT: '', REVIEW_LOGIN_MSISDN: '', REVIEW_LOGIN_CODE: '', METRICS_TOKEN: '',
+    })).not.toThrow();
+  });
+  test('a blank required value is still refused', () => {
+    expect(() => loadConfig({ ...prodEnv(), JWT_SECRET: '' })).toThrow(/JWT_SECRET/);
+  });
+});
+
