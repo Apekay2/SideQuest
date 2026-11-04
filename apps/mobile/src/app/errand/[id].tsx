@@ -72,7 +72,11 @@ function RequesterView({ e, link }: { e: ErrandDetail; link: ReturnType<typeof u
             <LiveMap runner={link.peer} dropoff={e.dropoff} runnerLabel={e.runner.display_name} dropoffLabel={T('live.map_dropoff')}
               caption={link.peer
                 ? T('live.map_runner', { name: e.runner.display_name, distance: humanDistance(metresBetween(link.peer, e.dropoff)) })
-                : T('live.map_waiting', { name: e.runner.display_name })} />
+                // The location link stopped for good (revoked, or the keys did not match):
+                // waiting will not bring the runner's location back, so do not say it might.
+                : link.state === 'failed'
+                  ? T('live.map_unavailable', { name: e.runner.display_name })
+                  : T('live.map_waiting', { name: e.runner.display_name })} />
           ) : null}
           <LocationLine link={link} />
         </Card>

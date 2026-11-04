@@ -194,7 +194,9 @@ refused, so it is safe to undo our side. An **unknown outcome** (timeout, droppe
 - a B2C payout or withdrawal stays open for its result callback, matched by the
   OriginatorConversationID we sent;
 - a till payment waits for its result and asks a human after 10 minutes;
-- an STK push stays pending and its callback is matched by payer and amount.
+- an STK push stays pending and its callback is matched by the payment id we put on its
+  callback URL (Safaricom masks the payer's number, so the number cannot be used); a push
+  nobody answers is expired an hour past its expiry, and a late success is still credited.
 
 Reconciliation pages on anything that stays unresolved.
 

@@ -14,11 +14,12 @@ import { nextStatus } from '@sidequest/domain/errand/machine';
 import { cents } from '@sidequest/domain/money/money';
 import { parseCallback } from '@sidequest/adapters';
 import { isDefinitiveRejection } from '@sidequest/domain/rails/mpesa.port';
-import { metrics } from '@sidequest/observability';
-import { type Handler, type JobContext, publish, later, str } from '../context.js';
+import { logger, metrics } from '@sidequest/observability';
+import { type Handler, type JobContext, type WorkerDeps, publish, later, str } from '../context.js';
 import { completeTranche } from './card-load.job.js';
 
 const EXPIRE_GRACE_MINUTES = 120;
+const PAYMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function msisdnOf(ctx: JobContext, accountId: string): Promise<string> {
   const [a] = await ctx.deps.sql<{ msisdn: string }[]>`SELECT msisdn FROM account WHERE id = ${accountId}`;
@@ -57,8 +58,8 @@ export const paymentStk: Handler = async (payload, ctx) => {
     }
     // The push may have reached the customer's phone. Marking it failed would leave a customer
     // who then pays with money we never credit: the callback could not be matched. It stays
-    // pending, without a checkout reference, and onStk matches its callback by number and
-    // amount instead; the sweeper expires it if nothing arrives.
+    // pending, without a checkout reference, and onStk matches its callback by the payment id
+    // on the callback URL instead; expireUnansweredPushes closes it if nothing arrives.
     ctx.log.warn({ err, paymentId }, 'stk push outcome unknown; waiting for the callback');
     metrics.increment('mpesa.outcome_unknown', { op: 'stk' });
     await ctx.deps.sql`UPDATE payment SET failure_code = 'push_unconfirmed' WHERE id = ${paymentId} AND status = 'pending'`;
@@ -66,27 +67,56 @@ export const paymentStk: Handler = async (payload, ctx) => {
 };
 
 /**
- * A push whose request timed out has no CheckoutRequestID on our side. Its callback is matched
- * by what Safaricom does report — the paying number and the amount — against exactly one such
- * unconfirmed payment from the last 30 minutes. Two candidates is ambiguous, and a human
- * decides (reconciliation reports unmatched receipts).
+ * A push whose request timed out has no CheckoutRequestID on our side. Its callback is found
+ * by the payment id on the callback URL (Daraja.stkPush), which arrives only through the
+ * webhook's token and source checks. Not by the payer's number: Safaricom masks it. A
+ * callback without the id is left unmatched, and reconciliation pages on a genuine receipt
+ * that matched nothing. The caller still checks the amount.
  */
-async function matchUnconfirmedPush(
-  tx: Tx,
-  r: NonNullable<ReturnType<typeof parseCallback>>,
-): Promise<string | null> {
-  if (!r.ok || !r.msisdn || r.amountCents === null) return null;
-  const candidates = await tx<{ id: string }[]>`
-    SELECT p.id FROM payment p JOIN account a ON a.id = p.account_id
-     WHERE p.provider = 'daraja' AND p.direction = 'in' AND p.status = 'pending'
-       AND p.provider_ref IS NULL AND p.failure_code = 'push_unconfirmed'
-       AND p.amount_cents = ${r.amountCents}
-       AND replace(a.msisdn, '+', '') = ${r.msisdn}
-       AND p.created_at > now() - interval '30 minutes'
-     FOR UPDATE OF p`;
-  if (candidates.length !== 1) return null;
-  await tx`UPDATE payment SET provider_ref = ${r.ref} WHERE id = ${candidates[0]!.id}`;
-  return candidates[0]!.id;
+async function matchUnconfirmedPush(tx: Tx, pushRef: string | null, checkoutRef: string): Promise<string | null> {
+  if (!pushRef) return null;
+  const [p] = await tx<{ id: string }[]>`
+    UPDATE payment SET provider_ref = ${checkoutRef}
+     WHERE id = ${pushRef} AND provider = 'daraja' AND direction = 'in'
+       AND provider_ref IS NULL AND status IN ('pending', 'expired')
+    RETURNING id`;
+  return p?.id ?? null;
+}
+
+/** How long past its expiry an M-Pesa prompt nobody answered stays open. */
+export const PUSH_EXPIRE_AFTER_MINUTES = 60;
+
+/**
+ * Close the M-Pesa prompts that never resolved: a push whose request timed out and whose
+ * callback never came, or a callback Safaricom never sent. They stayed `pending` for ever, and
+ * the customer saw a payment that never settled. An hour past expiry they are `expired` and the
+ * customer is told. A callback that still turns up is not lost: onStk treats `expired` as open,
+ * so a late success is credited.
+ */
+export async function expireUnansweredPushes(deps: WorkerDeps, batch = 200, maxBatches = 50): Promise<number> {
+  let total = 0;
+  // Batch after batch while a full one comes back, so a backlog clears in one run; bounded, so a
+  // run always ends. SKIP LOCKED keeps two workers off the same rows.
+  for (let i = 0; i < maxBatches; i++) {
+    const rows = await deps.sql<{ id: string; account_id: string; errand_id: string | null }[]>`
+      UPDATE payment SET status = 'expired'
+       WHERE id IN (SELECT id FROM payment
+                     WHERE provider = 'daraja' AND direction = 'in' AND status IN ('initiated', 'pending')
+                       AND COALESCE(expires_at, created_at) < now() - make_interval(mins => ${PUSH_EXPIRE_AFTER_MINUTES})
+                     ORDER BY created_at LIMIT ${batch}
+                     FOR UPDATE SKIP LOCKED)
+      RETURNING id, account_id, errand_id`;
+    // The status is the record; this is the live nudge to an open app, as for every payment
+    // event (publish is Redis pub/sub). One that fails must not cost the others theirs.
+    for (const p of rows) {
+      await publish(deps, p.account_id, 'payment.failed', { payment_id: p.id, errand_id: p.errand_id, reason: 'expired' })
+        .catch((err) => logger.warn({ err, paymentId: p.id }, 'payment.failed not published'));
+    }
+    total += rows.length;
+    if (rows.length < batch) break;
+  }
+  if (total) metrics.increment('mpesa.push_expired', {}, total);
+  return total;
 }
 
 /** Every Daraja callback lands here, from the webhook route or from the fake driver. */
@@ -94,6 +124,8 @@ export const mpesaCallback: Handler = async (payload, ctx) => {
   const kind = str(payload, 'kind') as 'stk' | 'result' | 'timeout';
   const body = payload.body;
   const result = parseCallback(kind === 'stk' ? 'stk' : 'result', body);
+  // STK only: the payment id from the callback URL (webhooks.routes.ts), when it carried one.
+  const pushRef = typeof payload.ref === 'string' && PAYMENT_ID.test(payload.ref) ? payload.ref : null;
 
   await ctx.deps.sql`
     INSERT INTO mpesa_event (direction, merchant_ref, checkout_ref, amount_cents, result_code, raw)
@@ -102,27 +134,30 @@ export const mpesaCallback: Handler = async (payload, ctx) => {
     ON CONFLICT (merchant_ref) DO NOTHING`;
   if (!result) { metrics.increment('mpesa.callback_unparsed'); return; }
 
-  if (result.kind === 'stk') return onStk(ctx, result);
+  if (result.kind === 'stk') return onStk(ctx, result, pushRef);
   if (result.kind === 'till') return onTill(ctx, result);
   return onB2c(ctx, result);
 };
 
-async function onStk(ctx: JobContext, r: NonNullable<ReturnType<typeof parseCallback>>) {
+async function onStk(ctx: JobContext, r: NonNullable<ReturnType<typeof parseCallback>>, pushRef: string | null) {
   const { sql, cfg } = ctx.deps;
   const out = await sql.begin(async (tx) => {
     let [p] = await tx<{ id: string; account_id: string; errand_id: string | null; amount_cents: number; status: string }[]>`
       SELECT id, account_id, errand_id, amount_cents, status FROM payment
        WHERE provider = 'daraja' AND provider_ref = ${r.ref} FOR UPDATE`;
     if (!p) {
-      const matched = await matchUnconfirmedPush(tx, r);
+      const matched = await matchUnconfirmedPush(tx, pushRef, r.ref);
       if (matched) {
         [p] = await tx<{ id: string; account_id: string; errand_id: string | null; amount_cents: number; status: string }[]>`
           SELECT id, account_id, errand_id, amount_cents, status FROM payment WHERE id = ${matched} FOR UPDATE`;
-        metrics.increment('mpesa.callback_matched_by_payer');
+        metrics.increment('mpesa.callback_matched_by_ref');
       }
     }
     if (!p) { metrics.increment('mpesa.callback_unmatched', { kind: 'stk' }); return null; }
     if (p.status === 'confirmed' || p.status === 'failed') return null;   // duplicate callback
+    // Expired stays open for a late success only: the customer has already been told this push
+    // failed, so a late cancel or timeout changes nothing and says nothing.
+    if (p.status === 'expired' && !r.ok) return null;
     if (!r.ok) {
       await tx`UPDATE payment SET status = 'failed', failure_code = ${r.resultCode} WHERE id = ${p.id}`;
       return { p, ok: false as const };

@@ -264,6 +264,7 @@
   "notify.settings": "Open Settings",
   "live.map_runner": "{name} is {distance} away",
   "live.map_waiting": "Waiting for {name}'s location",
+  "live.map_unavailable": "{name}'s location isn't available for this Qwest. Message them to check in.",
   "live.map_dropoff": "Drop-off",
   "legal.consent_before": "I'm 18 or older and I agree to the ",
   "legal.terms": "Terms of Service",

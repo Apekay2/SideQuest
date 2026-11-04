@@ -15,15 +15,16 @@ describe('daraja callbacks', () => {
       CheckoutRequestID: 'ws_CO_1', ResultCode: 0, ResultDesc: 'ok',
       CallbackMetadata: { Item: [{ Name: 'Amount', Value: 1500 }, { Name: 'MpesaReceiptNumber', Value: 'QK12' }] },
     } } });
-    expect(r).toEqual({ kind: 'stk', ref: 'ws_CO_1', ok: true, resultCode: '0', resultDesc: 'ok', amountCents: 150000, receipt: 'QK12', msisdn: null });
+    expect(r).toEqual({ kind: 'stk', ref: 'ws_CO_1', ok: true, resultCode: '0', resultDesc: 'ok', amountCents: 150000, receipt: 'QK12' });
   });
 
-  it('carries the payer on an STK result and the originator on a till or B2C result', () => {
+  it('carries the originator on a till or B2C result, and ignores the payer number Safaricom masks', () => {
     const stk = parseCallback('stk', { Body: { stkCallback: {
       CheckoutRequestID: 'ws_CO_2', ResultCode: 0,
-      CallbackMetadata: { Item: [{ Name: 'Amount', Value: 10 }, { Name: 'PhoneNumber', Value: 254722000111 }] },
+      CallbackMetadata: { Item: [{ Name: 'Amount', Value: 10 }, { Name: 'PhoneNumber', Value: '0722***111' }] },
     } } });
-    expect(stk?.msisdn).toBe('254722000111');
+    expect(stk).toMatchObject({ kind: 'stk', ref: 'ws_CO_2', ok: true, amountCents: 1000 });
+    expect(stk).not.toHaveProperty('msisdn');
     const b2c = parseCallback('result', { Result: { ConversationID: 'AG_3', OriginatorConversationID: 'b2c:payout:abc', ResultCode: 0 } });
     expect(b2c?.originator).toBe('b2c:payout:abc');
   });
@@ -40,12 +41,14 @@ describe('daraja callbacks', () => {
     expect(parseCallback('result', null)).toBeNull();
   });
 
-  it('the fake produces bodies the real parser accepts', async () => {
+  it('the fake produces bodies the real parser accepts, and hands back the push reference as the URL would', async () => {
     const got: unknown[] = [];
-    const fake = new FakeMpesa(async (kind, body) => { got.push(parseCallback(kind, body)); }, 1);
+    const refs: (string | undefined)[] = [];
+    const fake = new FakeMpesa(async (kind, body, pushRef) => { got.push(parseCallback(kind, body)); refs.push(pushRef); }, 1);
     const { checkoutRef } = await fake.stkPush({ msisdn: '+254722000111', amountCents: cents(150000), accountRef: 'x', description: 'x', idemKey: 'k' });
     await new Promise((r) => setTimeout(r, 20));
     expect(got[0]).toMatchObject({ kind: 'stk', ref: checkoutRef, ok: true, amountCents: 150000 });
+    expect(refs[0]).toBe('k');
   });
 
   it('refuses a non-whole-shilling amount before it reaches the rail', async () => {
@@ -161,6 +164,18 @@ describe('Daraja failures are classified, so a timeout is never treated as a ref
 
   it('an unrecognised error is never treated as a rejection', () => {
     expect(isDefinitiveRejection(new Error('socket hang up'))).toBe(false);
+  });
+
+  it('an STK push puts its payment id on the callback URL, so a timed-out push can still be matched', async () => {
+    const id = '6f1c2b9e-3d4a-4b8c-9e2f-1a2b3c4d5e6f';
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(token())
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ResponseCode: '0', CheckoutRequestID: 'ws_CO_9' }), { status: 200 }));
+    vi.stubGlobal('fetch', fetcher);
+    const out = await daraja().stkPush({ msisdn: '+254722000111', amountCents: cents(10_000), accountRef: 'x', description: 'x', idemKey: id });
+    expect(out).toEqual({ checkoutRef: 'ws_CO_9' });
+    const sent = JSON.parse(String((fetcher.mock.calls[1]![1] as RequestInit).body));
+    expect(sent.CallBackURL).toBe(`https://api.example.test/webhooks/daraja/tok/stk/${id}`);
   });
 });
 

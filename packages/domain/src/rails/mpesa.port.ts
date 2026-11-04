@@ -6,7 +6,12 @@
 import type { Cents } from '../money/money.js';
 
 export interface MpesaPort {
-  /** Prompt the customer's phone to pay into our paybill. Funding and top-ups. */
+  /**
+   * Prompt the customer's phone to pay into our paybill. Funding and top-ups. `idemKey` is the
+   * payment's id, and it comes back on the callback's URL: the callback body carries only
+   * Safaricom's CheckoutRequestID (which a timed-out request never gave us) and a payer number
+   * Safaricom masks, so the URL is the one thing we sent that is sure to return.
+   */
   stkPush(args: {
     msisdn: string; amountCents: Cents; accountRef: string; description: string; idemKey: string;
   }): Promise<{ checkoutRef: string }>;
@@ -35,8 +40,6 @@ export interface MpesaResult {
    * before Safaricom's ConversationID reached us.
    */
   originator?: string | null;
-  /** STK results: the paying number (E.164 without '+', as Safaricom reports it). */
-  msisdn?: string | null;
 }
 
 /**

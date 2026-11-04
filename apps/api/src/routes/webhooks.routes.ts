@@ -14,6 +14,8 @@ import { withActor, enqueueOutbox } from '@sidequest/db';
 import { ipInCidrs } from '@sidequest/adapters';
 import { metrics } from '@sidequest/observability';
 
+const PAYMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default async function webhookRoutes(app: FastifyInstance) {
   const { cfg, sql } = app.deps;
 
@@ -38,12 +40,18 @@ export default async function webhookRoutes(app: FastifyInstance) {
       req.log.warn({ ip: req.trustedIp, reason: why }, 'daraja callback dropped');
       return { ResultCode: 0, ResultDesc: 'Accepted' };
     }
-    await withActor(sql, null, (tx) => enqueueOutbox(tx, 'mpesa.callback', { kind, body: req.body as Record<string, unknown> }));
+    // An STK callback URL ends in the id of the payment that sent the push (Daraja.stkPush).
+    // Anything that is not a payment id is ignored rather than refused: the body still counts.
+    const ref = (req.params as { ref?: string }).ref;
+    const pushRef = kind === 'stk' && ref && PAYMENT_ID.test(ref) ? ref.toLowerCase() : null;
+    await withActor(sql, null, (tx) => enqueueOutbox(tx, 'mpesa.callback',
+      { kind, body: req.body as Record<string, unknown>, ...(pushRef ? { ref: pushRef } : {}) }));
     metrics.increment('webhook.accepted', { source: 'daraja', kind });
     return { ResultCode: 0, ResultDesc: 'Accepted' };
   };
 
   app.post('/webhooks/daraja/:token/stk', daraja('stk'));
+  app.post('/webhooks/daraja/:token/stk/:ref', daraja('stk'));
   app.post('/webhooks/daraja/:token/b2c/result', daraja('result'));
   app.post('/webhooks/daraja/:token/timeout', daraja('timeout'));
 
